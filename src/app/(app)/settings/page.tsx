@@ -93,7 +93,6 @@ const TABS = [
   { id: "exams", label: "Exam Preferences", icon: GraduationCap },
   { id: "preparation", label: "Preparation Preferences", icon: BookOpen },
   { id: "security", label: "Security", icon: Shield },
-  { id: "appearance", label: "Appearance", icon: Palette },
   { id: "account", label: "Account", icon: SettingsIcon },
 ];
 
