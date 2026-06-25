@@ -32,7 +32,7 @@ const itemVariants: Variants = {
   show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } }
 };
 
-const glassCardClass = "bg-white/80 dark:bg-black/40 backdrop-blur-2xl border border-white/60 dark:border-white/10 rounded-[24px] shadow-[0_20px_60px_rgba(15,23,42,0.08)] overflow-hidden";
+const glassCardClass = "bg-white/80 dark:bg-black/40 backdrop-blur-3xl border border-white/60 dark:border-white/10 rounded-[24px] shadow-[0_20px_60px_rgba(15,23,42,0.08)] overflow-hidden transition-all duration-500 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)] hover:border-white/80 dark:hover:border-white/20";
 const glassInputClass = "bg-black/5 dark:bg-white/5 rounded-xl h-12 text-[#111827] dark:text-white border-transparent focus:border-[#7F77DD] focus:ring-[#7F77DD] placeholder:text-[#6B7280]";
 
 const mockHistory = [
@@ -83,13 +83,13 @@ export default function PreparationRoadmapPage() {
   type TaskPriority = 'High Priority' | 'Secondary';
   
   const [priorityTasks, setPriorityTasks] = useState([
-    { id: 1, title: 'Arithmetic Practice', category: 'Quant', duration: '45 Minutes', status: 'Pending' as TaskStatus, priority: 'High Priority' as TaskPriority, color: '#2563EB' },
-    { id: 2, title: 'DILR Arrangement Set', category: 'DILR', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'High Priority' as TaskPriority, color: '#F59E0B' },
+    { id: 1, title: 'Arithmetic Practice', category: 'Quantitative Ability', duration: '45 Minutes', status: 'Pending' as TaskStatus, priority: 'High Priority' as TaskPriority, color: '#2563EB' },
+    { id: 2, title: 'Logical Reasoning Arrangement Set', category: 'Data Interpretation & Logical Reasoning', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'High Priority' as TaskPriority, color: '#F59E0B' },
   ]);
 
   const [secondaryTasks, setSecondaryTasks] = useState([
-    { id: 3, title: 'Reading Comprehension', category: 'VARC', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'Secondary' as TaskPriority, color: '#1D9E75' },
-    { id: 4, title: 'Mock Analysis', category: 'Strategy', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'Secondary' as TaskPriority, color: '#A855F7' },
+    { id: 3, title: 'Reading Comprehension', category: 'Verbal Ability & Reading Comprehension', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'Secondary' as TaskPriority, color: '#1D9E75' },
+    { id: 4, title: 'Mock Test Analysis', category: 'Strategy', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'Secondary' as TaskPriority, color: '#A855F7' },
   ]);
 
   const handleTaskAction = (taskId: number, action: 'start' | 'complete' | 'skip', isPriority: boolean) => {
@@ -234,7 +234,7 @@ export default function PreparationRoadmapPage() {
           <div className="relative z-10 p-8 md:p-12 flex flex-col md:flex-row gap-8 justify-between items-center">
             <div className="text-white space-y-6 flex-1 w-full">
               <div className="flex flex-wrap items-center gap-4">
-                <div className="bg-white/20 backdrop-blur-md border border-white/30 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full shadow-sm">Active OS</div>
+                <div className="bg-white/20 backdrop-blur-md border border-white/30 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full shadow-sm">Active Roadmap</div>
                 <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">CAT 2027</h1>
               </div>
               
@@ -358,7 +358,7 @@ export default function PreparationRoadmapPage() {
                 </div>
                 <div className="w-px h-10 bg-black/10 dark:bg-white/10 hidden md:block"></div>
                 <div className="flex flex-col text-center md:text-right">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">Est. Completion</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">Estimated Completion Date</span>
                   <span className="text-lg font-bold text-[#111827] dark:text-white">Aug 15, 2026</span>
                 </div>
               </div>
@@ -441,8 +441,8 @@ export default function PreparationRoadmapPage() {
               
               <div className="grid sm:grid-cols-2 gap-4">
                 {[
-                  { phase: 'Phase 1', title: 'Foundation', start: 'Jun 2026', end: 'Aug 2026', color: '#2563EB', active: true, items: ['Arithmetic', 'Algebra', 'Reading Comprehension', 'Basic DILR'] },
-                  { phase: 'Phase 2', title: 'Concept Building', start: 'Aug 2026', end: 'Oct 2026', color: '#7C3AED', active: false, items: ['Advanced Quant', 'Advanced DILR', 'RC Strategy'] },
+                  { phase: 'Phase 1', title: 'Foundation', start: 'Jun 2026', end: 'Aug 2026', color: '#2563EB', active: true, items: ['Arithmetic', 'Algebra', 'Reading Comprehension', 'Basic Data Interpretation & Logical Reasoning'] },
+                  { phase: 'Phase 2', title: 'Concept Building', start: 'Aug 2026', end: 'Oct 2026', color: '#7C3AED', active: false, items: ['Advanced Quantitative Ability', 'Advanced Data Interpretation & Logical Reasoning', 'Reading Comprehension Strategy'] },
                   { phase: 'Phase 3', title: 'Mock Intensive', start: 'Oct 2026', end: 'Dec 2026', color: '#F59E0B', active: false, items: ['Mocks', 'Analysis', 'Weak Area Improvement'] },
                   { phase: 'Phase 4', title: 'Revision', start: 'Dec 2026', end: 'Jan 2027', color: '#10B981', active: false, items: ['Revision', 'Strategy', 'Exam Readiness'] },
                 ].map((item, i) => (
@@ -484,9 +484,9 @@ export default function PreparationRoadmapPage() {
               
               <div className={`${glassCardClass} p-6 space-y-5`}>
                 {[
-                  { name: 'Quant', value: 55, current: '62/100', target: '80/100', color: '#2563EB', reason: 'Current score is below target. High weightage in upcoming phase.' },
-                  { name: 'DILR', value: 30, current: '45/100', target: '65/100', color: '#F59E0B', reason: 'Recent mock performance dropped. Needs arrangement practice.' },
-                  { name: 'VARC', value: 15, current: '75/100', target: '85/100', color: '#10B981', reason: 'On track. Maintain with light reading and occasional RC sets.' },
+                  { name: 'Quantitative Ability', value: 55, current: '62/100', target: '80/100', color: '#2563EB', reason: 'Current score is below target. High weightage in upcoming phase.' },
+                  { name: 'Data Interpretation & Logical Reasoning', value: 30, current: '45/100', target: '65/100', color: '#F59E0B', reason: 'Recent mock performance dropped. Needs arrangement practice.' },
+                  { name: 'Verbal Ability & Reading Comprehension', value: 15, current: '75/100', target: '85/100', color: '#10B981', reason: 'On track. Maintain with light reading and occasional RC sets.' },
                 ].map((sec, i) => (
                   <div key={i} className="bg-black/5 dark:bg-white/5 rounded-2xl p-4 border border-black/5 dark:border-white/5">
                     <div className="flex items-center justify-between mb-3">
@@ -497,8 +497,8 @@ export default function PreparationRoadmapPage() {
                         <div>
                           <h4 className="text-sm font-bold text-[#111827] dark:text-white">{sec.name}</h4>
                           <div className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] flex gap-2">
-                            <span>Cur: {sec.current}</span>
-                            <span>Tgt: {sec.target}</span>
+                            <span>Current Score: {sec.current}</span>
+                            <span>Target Score: {sec.target}</span>
                           </div>
                         </div>
                       </div>
@@ -532,12 +532,12 @@ export default function PreparationRoadmapPage() {
                   <div className="flex items-center gap-4 border-b border-black/5 dark:border-white/5 pb-4">
                     <div className="flex-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] block mb-1">Current Strength</span>
-                      <span className="text-sm font-bold text-[#10B981] flex items-center gap-1.5"><TrendingUp className="w-3 h-3" /> VARC</span>
+                      <span className="text-sm font-bold text-[#10B981] flex items-start gap-1.5"><TrendingUp className="w-3 h-3 mt-0.5 shrink-0" /> Verbal Ability & Reading Comprehension</span>
                     </div>
-                    <div className="w-px h-8 bg-black/10 dark:bg-white/10"></div>
+                    <div className="w-px min-h-[40px] bg-black/10 dark:bg-white/10"></div>
                     <div className="flex-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] block mb-1">Current Weakness</span>
-                      <span className="text-sm font-bold text-[#E11D48] flex items-center gap-1.5"><Activity className="w-3 h-3" /> DILR</span>
+                      <span className="text-sm font-bold text-[#E11D48] flex items-start gap-1.5"><Activity className="w-3 h-3 mt-0.5 shrink-0" /> Data Interpretation & Logical Reasoning</span>
                     </div>
                   </div>
 
@@ -552,8 +552,8 @@ export default function PreparationRoadmapPage() {
                   </div>
 
                   <div className="flex gap-2 pt-2">
-                    <Button onClick={() => { toast.success('Generating personalized practice set...'); setTimeout(() => toast.success('Practice set ready in your workspace!'), 2000); }} className="flex-1 bg-[#111827] hover:bg-[#111827]/90 dark:bg-white dark:hover:bg-white/90 dark:text-black text-white rounded-xl text-xs font-bold shadow-md">
-                      <FileText className="w-3.5 h-3.5 mr-1.5" /> Gen Practice Set
+                    <Button onClick={() => { toast.success('Generating personalized practice set...'); setTimeout(() => toast.success('Practice set ready in your workspace!'), 2000); }} className="flex-1 bg-[#111827] hover:bg-[#111827]/90 dark:bg-white dark:hover:bg-white/90 dark:text-black text-white rounded-xl text-xs font-bold shadow-md px-2">
+                      <FileText className="w-3.5 h-3.5 mr-1.5 shrink-0" /> Generate Practice Set
                     </Button>
                     <Button onClick={() => router.push('/catgpt')} variant="outline" className="flex-1 rounded-xl text-xs font-bold border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5">
                       <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Ask CATGPT
@@ -637,9 +637,9 @@ export default function PreparationRoadmapPage() {
                   <div className="space-y-3">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#6B7280] pl-1 border-l-2 border-[#2563EB]">Weekly Allocation</h3>
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm font-bold"><span>Quant</span><span className="text-[#2563EB]">55%</span></div>
-                      <div className="flex items-center justify-between text-sm font-bold"><span>DILR</span><span className="text-[#F59E0B]">30%</span></div>
-                      <div className="flex items-center justify-between text-sm font-bold"><span>VARC</span><span className="text-[#10B981]">15%</span></div>
+                      <div className="flex items-center justify-between text-sm font-bold"><span>Quantitative Ability</span><span className="text-[#2563EB]">55%</span></div>
+                      <div className="flex items-center justify-between text-sm font-bold"><span className="truncate pr-2">Data Interpretation & Logical Reasoning</span><span className="text-[#F59E0B]">30%</span></div>
+                      <div className="flex items-center justify-between text-sm font-bold"><span className="truncate pr-2">Verbal Ability & Reading Comprehension</span><span className="text-[#10B981]">15%</span></div>
                     </div>
                   </div>
 
@@ -907,14 +907,14 @@ export default function PreparationRoadmapPage() {
                         <div className="space-y-4">
                           <Label className="text-sm font-bold text-[#111827] dark:text-white uppercase tracking-wider">Weak Sections (Multi Select) *</Label>
                           <div className="flex flex-wrap gap-3">
-                            {['Quant', 'DILR', 'VARC'].map(sec => {
+                            {['Quantitative Ability', 'Data Interpretation & Logical Reasoning', 'Verbal Ability & Reading Comprehension'].map(sec => {
                               const isSelected = wizardData.weakSections.includes(sec);
                               return (
                                 <button key={sec} onClick={() => {
                                   const newSec = isSelected ? wizardData.weakSections.filter(s => s !== sec) : [...wizardData.weakSections, sec];
                                   setWizardData({...wizardData, weakSections: newSec});
                                 }}
-                                  className={`px-6 py-4 rounded-2xl border-2 font-bold text-lg transition-all flex items-center gap-2 ${isSelected ? 'border-[#E11D48] bg-[#E11D48]/10 text-[#E11D48]' : 'border-black/5 dark:border-white/5 bg-white dark:bg-[#111827] text-[#6B7280] hover:border-black/10 dark:hover:border-white/10'}`}>
+                                  className={`px-4 py-3 rounded-2xl border-2 font-bold text-sm lg:text-base transition-all flex items-center gap-2 ${isSelected ? 'border-[#E11D48] bg-[#E11D48]/10 text-[#E11D48]' : 'border-black/5 dark:border-white/5 bg-white dark:bg-[#111827] text-[#6B7280] hover:border-black/10 dark:hover:border-white/10'}`}>
                                   {isSelected && <Check className="w-5 h-5" />} {sec}
                                 </button>
                               );
@@ -963,16 +963,16 @@ export default function PreparationRoadmapPage() {
                             <p className="text-sm font-bold text-[#111827] dark:text-white">{wizardData.targetColleges.length ? wizardData.targetColleges.join(', ') : 'None selected'}</p>
                           </div>
                           <div className="space-y-1 sm:col-span-2 pt-4 border-t border-black/5 dark:border-white/5">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">Current Scores</span>
-                            <div className="flex gap-4">
-                              <span className="text-xs font-bold bg-[#2563EB]/10 text-[#2563EB] px-2 py-1 rounded-md">Q: {wizardData.quantLevel}</span>
-                              <span className="text-xs font-bold bg-[#F59E0B]/10 text-[#F59E0B] px-2 py-1 rounded-md">D: {wizardData.dilrLevel}</span>
-                              <span className="text-xs font-bold bg-[#10B981]/10 text-[#10B981] px-2 py-1 rounded-md">V: {wizardData.varcLevel}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-2 block">Current Scores</span>
+                            <div className="flex flex-col gap-2">
+                              <span className="text-xs font-bold bg-[#2563EB]/10 text-[#2563EB] px-3 py-1.5 rounded-lg border border-[#2563EB]/20">Quantitative Ability: {wizardData.quantLevel}</span>
+                              <span className="text-xs font-bold bg-[#F59E0B]/10 text-[#F59E0B] px-3 py-1.5 rounded-lg border border-[#F59E0B]/20">Data Interpretation & Logical Reasoning: {wizardData.dilrLevel}</span>
+                              <span className="text-xs font-bold bg-[#10B981]/10 text-[#10B981] px-3 py-1.5 rounded-lg border border-[#10B981]/20">Verbal Ability & Reading Comprehension: {wizardData.varcLevel}</span>
                             </div>
                           </div>
                           <div className="space-y-1 pt-4 border-t border-black/5 dark:border-white/5">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">Study Availability</span>
-                            <p className="text-sm font-bold text-[#111827] dark:text-white">{wizardData.dailyHours} hrs/day, {wizardData.weeklyDays} days/week</p>
+                            <p className="text-sm font-bold text-[#111827] dark:text-white">{wizardData.dailyHours} hours per day, {wizardData.weeklyDays} days per week</p>
                           </div>
                           <div className="space-y-1 pt-4 border-t border-black/5 dark:border-white/5">
                             <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280]">Weak Areas</span>

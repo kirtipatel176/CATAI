@@ -1,0 +1,485 @@
+MBAOS
+Target CAT Score Engine
+College-Specific Selection Logic, Probability Model & Back-Solved Percentile Architecture
+Technical Design Document — Version 2.0
+Module: Profile Evaluator → CAT Target Predictor → Shortlisting Engine
+Prepared for engineering handoff
+Why this document exists
+The MVP PRD (v1.0) defines a single flat formula: Base College Cutoff + Profile Adjustment = Recommended CAT Target. That formula treats every college the same way, even though IIM Ahmedabad, IIM Bangalore, and SPJIMR each weigh CAT score, academics, work experience, and interview performance differently.
+This document replaces that flat formula with a two-stage engine: (1) compute the student's admission probability at a specific college using that college's own weight table, then (2) algebraically back-solve the exact CAT percentile the student needs at that same college to cross a target probability threshold. The result: the same student gets a different required CAT score for IIM Ahmedabad vs IIM Bangalore vs SPJIMR — because the underlying math now actually uses each college's selection criteria, not just its cutoff number.
+
+Table of Contents
+
+
+
+1. Problem Statement & Goal
+The student's primary question is:
+STUDENT INTENT
+"I want to get into [College X]. Based on last year's cutoff and percentile data, and based on MY profile, what CAT score / percentile do I actually need?"
+This is harder than a single lookup because colleges don't select students on CAT score alone. The Admission Criteria Database (PRD §10) already captures this — each college has its own exam_weight, academic_weight, workex_weight, and interview_weight — but the v1.0 CAT Target Predictor (PRD §11) never actually uses those weights. It only does cutoff + flat adjustment. This document fixes that gap.
+1.1 Design Goals
+	•	Use each college's actual selection weightage, not a one-size-fits-all cutoff adjustment.
+	•	Produce a different required CAT percentile per college for the same student (this is the whole point — IIM Ahmedabad and IIM Bangalore must not return the same number just because the cutoffs are close).
+	•	Be transparent about assumptions — anything not yet known about the student (e.g. interview performance, pre-interview) must be clearly flagged as an assumed default, not silently baked in.
+	•	Stay computable in real time on form submit — no external calls, no ML training step required for MVP.
+	•	Feed directly into the existing Shortlisting Engine (Dream / Target / Safe) using probability, not just percentile gap.
+2. System Architecture
+Four cooperating services sit behind the existing Profile Evaluator form. The Target CAT Score Engine described in this document is a new internal service that sits between the Profile Scoring Engine and the Shortlisting Engine.
+2.1 High-Level Component Diagram
+┌──────────────────────────────────────────────────────────────────────┐
+│                         CLIENT (Web / App)                          │
+│              Multi-step Form  →  College Picker  →  Report          │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                │ REST/JSON
+                                ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                         API GATEWAY LAYER                            │
+│   /profile/submit   /colleges/search   /target-score/calculate      │
+└───────┬───────────────────┬────────────────────┬─────────────────────┘
+        ▼                   ▼                    ▼
+┌───────────────┐   ┌────────────────────┐  ┌─────────────────────────┐
+│   PROFILE     │   │  COLLEGE           │  │   TARGET CAT SCORE      │
+│   SCORING     │──▶│  INTELLIGENCE       │─▶│   ENGINE  (NEW)         │
+│   ENGINE      │   │  SERVICE             │  │  Stage 1: Probability   │
+│ (PRD §5)      │   │ (PRD §7, §9, §10)    │  │  Stage 2: Back-solve    │
+└───────┬───────┘   └─────────┬──────────┘  └────────────┬─────────────┘
+        │                     │                          │
+        ▼                     ▼                          ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                       SHORTLISTING ENGINE                            │
+│        Classifies each searched college as Dream / Target / Safe     │
+│             using Probability output from Target Score Engine        │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│         WEAKNESS DETECTION ENGINE   +   FINAL REPORT BUILDER         │
+└──────────────────────────────────────────────────────────────────────┘
+2.2 Why a Separate Target CAT Score Engine
+The Profile Scoring Engine produces one number for the student (the Profile Score, 0–100) that is college-agnostic. The Target CAT Score Engine is college-aware — it is called once per college the student is comparing against, because the required CAT percentile genuinely differs by college. Separating these two responsibilities means:
+	•	The Profile Score doesn't need to be recalculated when the student adds another college to compare.
+	•	College weight changes (admission_criteria table) never require touching the Profile Scoring Engine.
+	•	The engine can be called for one college (detail view) or batched across 10–15 colleges (shortlist view) without duplicating logic.
+3. End-to-End Functional Flow
+3.1 Primary User Flow — "What CAT score do I need for College X?"
+STEP 1   Student completes Profile Evaluator form (PRD §4)
+             │
+STEP 2   Profile Scoring Engine computes:
+             • Academic Score   (0–55)
+             • Exam Readiness    (0–25, from mock percentile or default 10)
+             • WorkEx Score      (0–10)
+             • Leadership Score  (0–5)
+             • Internship Score  (0–5)
+             → Profile Score (0–100) + Category (Elite/Strong/.../Needs Improvement)
+             │
+STEP 3   Student selects target college(s) — e.g. 'IIM Ahmedabad', 'IIM Bangalore'
+             │
+STEP 4   For EACH selected college, Target CAT Score Engine runs:
+             │
+             ├─ 4a. Fetch college's admission_criteria weights
+             │      (exam_weight, academic_weight, workex_weight, interview_weight)
+             │
+             ├─ 4b. Fetch college's historical cutoff_percentile (latest year, student's category)
+             │
+             ├─ 4c. STAGE 1 — Composite Score + Admission Probability
+             │      Plug student's current mock percentile (or category default) into the
+             │      college's own weighted formula → get Composite Score (0–100)
+             │      → Map Composite Score to Probability using college-tier calibration
+             │
+             └─ 4d. STAGE 2 — Back-solve Required CAT Percentile
+                    Algebraically solve: 'what CAT percentile makes Probability = 80%?'
+                    → Required CAT Percentile for THIS college
+                    → Convert to Required CAT Score + Expected Rank (interpolated lookup)
+             │
+STEP 5   Shortlisting Engine classifies the college as Dream / Target / Safe
+             using the Stage 1 Probability (not just percentile gap)
+             │
+STEP 6   Weakness Detection Engine flags top 3 gaps specific to THIS college's weight profile
+             (e.g. 'Work experience contributes 10% at IIM-A — yours is currently 0%')
+             │
+STEP 7   Final Report renders per-college cards: Probability, Required CAT %, Required Score, Rank
+3.2 Sequence Diagram — Single College Lookup
+ Client          API Gateway      Profile Engine    College Intel    Target Score Engine
+   │                  │                  │                │                  │
+   │── submit form ──▶│                  │                │                  │
+   │                  │── score profile ▶│                │                  │
+   │                  │◀── ProfileScore ─│                │                  │
+   │── select college▶│                  │                │                  │
+   │                  │── get weights/cutoffs ────────────▶│                  │
+   │                  │◀──────── weights, cutoff, history ─│                  │
+   │                  │── ProfileScore + weights + cutoff ─────────────────────▶│
+   │                  │                  │                │   Stage 1: prob   │
+   │                  │                  │                │   Stage 2: target │
+   │                  │◀───────────────────────── {probability, requiredCAT} ─│
+   │◀── render card ──│                  │                │                  │
+4. Stage 1 — Composite Score & Admission Probability
+Goal: produce a single number representing how competitive the student's full profile is at a specific college, using that college's own weights — not a generic average.
+4.1 Per-Component Normalization (0–100 scale)
+Before applying college weights, each input must be normalized to a common 0–100 scale so weights are comparable regardless of each component's native scale.
+Component
+Source
+Normalization
+CAT Percentile
+Mock percentile (Step 2 of form) or, post-attempt, actual percentile
+Already 0–100 scale. Used directly.
+Academic Component
+Profile Scoring Engine's Academic Score (max 55)
+Academic_norm = (Academic Score ÷ 55) × 100
+WorkEx Component
+Profile Scoring Engine's WorkEx Score (max 10)
+WorkEx_norm = (WorkEx Score ÷ 10) × 100
+Interview Component
+Not available pre-interview
+Assumed default = 70 ("average performer") — see §4.3
+4.2 Composite Score Formula
+CompositeScore(college) =
+      (CAT_percentile        × exam_weight)
+    + (Academic_norm         × academic_weight)
+    + (WorkEx_norm           × workex_weight)
+    + (Interview_assumed     × interview_weight)
+ 
+  where each weight is a fraction (e.g. 0.65, not 65) and weights sum to 1.0
+  for that college. Result is on a 0–100 scale.
+The worked examples below use one consistent student profile throughout this document — Academic Score normalized to 90.0, WorkEx Score normalized to 80.0, mock CAT percentile 97.0 — so the IIM Ahmedabad and SPJIMR results can be compared directly.
+Worked Example — IIM Ahmedabad
+Weights from PRD §10: CAT = 65%, Academics = 25%, WorkEx = 10%, Interview = not specified → treated as 0% (redistribution rule, see §4.4).
+Input
+Value
+Student mock CAT percentile
+97.0
+Academic Score normalized
+90.0
+WorkEx Score normalized
+80.0
+Composite Score
+(97.0×0.65)+(90.0×0.25)+(80.0×0.10) = 63.05+22.50+8.00 = 93.55
+Worked Example — SPJIMR (same student)
+Weights: CAT = 50%, Academics = 20%, WorkEx = 15%, Interview = 15%. Interview assumed at 70 (flagged to student as an assumption, not a guarantee).
+Input
+Value
+Student mock CAT percentile
+97.0
+Academic Score normalized
+90.0
+WorkEx Score normalized
+80.0
+Interview (assumed)
+70.0
+Composite Score
+(97.0×0.50)+(90.0×0.20)+(80.0×0.15)+(70.0×0.15) = 48.5+18.0+12.0+10.5 = 89.0
+WHY THIS MATTERS
+Same student, same mock percentile (97.0) — IIM Ahmedabad Composite = 93.55, SPJIMR Composite = 89.0. The colleges weigh the same inputs differently, so they must NOT receive the same downstream required-CAT-percentile number. This is the core problem the v1.0 flat formula could not represent.
+4.3 Handling the Interview Component (Pre-Interview Stage)
+	•	Default assumption = 70/100 ("average performer"), applied uniformly so it doesn't arbitrarily help or hurt any one student.
+	•	The Final Report MUST display this assumption explicitly: "Interview component assumed at average (70/100) — your actual target may shift once interview shortlist data is available."
+	•	Once a student logs an actual interview/WAT-PI score (future module, not in MVP scope), the engine re-runs Stage 1 with the real value instead of the default.
+4.4 Colleges With No Interview Weight (e.g. IIM Ahmedabad)
+Per the Admission Criteria Database (PRD §10), IIM Ahmedabad's listed weights are CAT 65%, Academics 25%, WorkEx 10% — summing to 100% with no interview component recorded. Rule:
+	•	If a college's stored weights already sum to 100%, use them as-is. Do not inject an interview term.
+	•	If a college's stored weights sum to less than 100% (data entry gap) and no interview_weight is set, the missing percentage is redistributed proportionally across the existing components — not silently dropped, and not assumed as interview score. This is a data-quality safeguard, not a scoring rule. Flag any college with this gap in an admin data-quality report.
+4.5 Stage 1 Output — Admission Probability
+Composite Score alone isn't meaningful across colleges (an 85 at IMI does not mean the same admit chance as an 85 at IIM Ahmedabad). Convert to probability using a logistic curve calibrated per college tier:
+P(admit) = 1 / (1 + e^(-k × (CompositeScore − T)))
+ 
+  T = college's calibrated composite threshold
+      (derived once per college by converting its historical cutoff_percentile
+       into composite-score-equivalent terms — stored in admission_criteria as
+       'calibrated_threshold', recomputed yearly when new cutoff data lands)
+ 
+  k = steepness constant — controls how sharply probability rises near the threshold
+      Default k = 0.15 for MVP (single global constant, tunable per college tier later)
+College
+Composite Score
+Calibrated Threshold (T)
+Probability
+IIM Ahmedabad
+93.55
+92.0 (Elite tier, very tight band)
+≈ 56%
+SPJIMR
+89.0
+80.0 (Target tier)
+≈ 79%
+5. Stage 2 — Back-Solving the Required CAT Percentile
+Goal: instead of just reporting today's probability, tell the student exactly what CAT percentile they need to reach a target probability — typically 80% for a college to be realistically classified as "Target" rather than "Dream".
+5.1 Inverting the Logistic Function
+Because Composite Score is linear in CAT percentile (it's just one weighted term among several), the logistic relationship can be algebraically inverted to solve directly for the CAT percentile that produces any desired probability — no trial-and-error, no simulation loop.
+Step 1 — invert probability to required Composite Score:
+ 
+    CompositeScore_required = T + ln( P / (1 − P) ) / k
+ 
+    where P = target probability (0.80 default for 'Target' band, 0.50 for 'Dream' band)
+ 
+Step 2 — isolate the CAT percentile term from the weighted sum:
+ 
+    CompositeScore_required =
+          (CAT_required      × exam_weight)
+        + (Academic_norm     × academic_weight)        ← already known, fixed
+        + (WorkEx_norm       × workex_weight)           ← already known, fixed
+        + (Interview_assumed × interview_weight)        ← already known, fixed
+ 
+    ⇒  CAT_required =
+         ( CompositeScore_required
+           − Academic_norm×academic_weight
+           − WorkEx_norm×workex_weight
+           − Interview_assumed×interview_weight )
+         ÷ exam_weight
+ 
+Step 3 — clamp to valid percentile bounds:
+    CAT_required = MIN( MAX(CAT_required, 50), 99.9 )
+5.2 Worked Example — Required CAT % for 80% Admission Probability
+IIM Ahmedabad
+Step
+Calculation
+Result
+Required Composite Score
+92.0 + ln(0.80/0.20) / 0.15 = 92.0 + 9.24
+101.24
+Fixed contributions
+Academic 90.0×0.25 + WorkEx 80.0×0.10
+22.5 + 8.0 = 30.5
+Solve for CAT term
+(101.24 − 30.5) ÷ 0.65
+108.8 → exceeds 99.9 ceiling
+Final Required CAT Percentile
+Clamped
+99.9 (effectively "near-perfect CAT needed")
+EXPECTED BEHAVIOUR, NOT A BUG
+This result is correct, not a bug: at IIM Ahmedabad's calibrated threshold (92.0), the student's current academic/work-ex profile leaves very little room — even a near-perfect CAT percentile cannot push admission probability much past the low-to-mid Target band (§6) for this profile. The report should state this plainly — "Even at 99.9 percentile CAT, your current academic and work-ex profile keeps IIM Ahmedabad at the harder end of your Target range, not a comfortable Safe choice" — rather than implying 99.9 buys certainty.
+SPJIMR
+Step
+Calculation
+Result
+Required Composite Score
+80.0 + ln(0.80/0.20) / 0.15 = 80.0 + 9.24
+89.24
+Fixed contributions
+Academic 90.0×0.20 + WorkEx 80.0×0.15 + Interview 70.0×0.15
+18.0+12.0+10.5 = 40.5
+Solve for CAT term
+(89.24 − 40.5) ÷ 0.50
+97.5 — within bounds, no clamping needed
+Final Required CAT Percentile
+—
+97.5 (achievable — classified as Target)
+RESULT
+Same student profile, two colleges, two genuinely different required CAT percentiles (99.9-and-capped vs 97.5-and-achievable) — because the weights and thresholds differ. This is the behaviour the client requirement actually asked for.
+5.3 Converting Required Percentile → Required Score → Expected Rank
+PRD §8's cat_percentile_mapping table is sparse (only ~6 reference rows: 90, 95, 98, 99, 99.5, 99.9). A required percentile of 98.5 or 97.3 will not have an exact row. Rule:
+	•	Linear interpolation between the two nearest stored percentile rows for both raw_score and approx_rank.
+	•	Example: required percentile 98.5 sits between stored rows 98 (score 85, rank 6000) and 99 (score 95, rank 3000). Interpolated score = 85 + (98.5−98)/(99−98)×(95−85) = 90. Interpolated rank = 6000 + (98.5−98)/(99−98)×(3000−6000) = 4500.
+	•	If required percentile exceeds the highest stored row (99.9), do not extrapolate beyond it — display the 99.9 row's score/rank as a ceiling value with a label "99.9+".
+	•	Recompute interpolation inputs yearly when new cat_percentile_mapping rows are added (PRD §8 requires minimum 5 years stored).
+6. Shortlisting Engine — Probability-Driven Classification
+PRD §12 classifies colleges by percentile gap OR probability band. With Stage 1 now producing a real probability per college, classification becomes consistent and removes the ambiguity of the original "gap > 3 OR probability < 50%" dual condition.
+Band
+Admission Probability (Stage 1 output)
+Meaning shown to student
+Safe
+> 80%
+Comfortably likely with current profile
+Target
+50% – 80%
+Achievable with the Required CAT % from Stage 2
+Dream
+< 50%
+Stretch goal — Stage 2 may show a capped/near-ceiling required percentile
+DESIGN DECISION
+Using probability (not raw percentile gap) as the sole classification input removes the PRD v1.0 ambiguity where gap-based and probability-based thresholds could disagree for the same college.
+7. Database Design
+Builds on the PRD's existing tables (§7–§10) and adds the fields needed for the two-stage engine. New/changed fields are marked.
+7.1 Entity Relationship Overview
+  students                colleges                  admission_criteria
+  ┌──────────────┐        ┌───────────────────┐      ┌─────────────────────────┐
+  │ id        PK │        │ id            PK  │◀────┤ college_id          FK  │
+  │ category     │        │ college_name       │     │ exam_weight              │
+  │ ...          │        │ tier               │     │ academic_weight          │
+  └──────┬───────┘        │ city               │     │ workex_weight            │
+         │                │ fees               │     │ interview_weight         │
+         │                │ avg/highest_package│     │ calibrated_threshold *NEW│
+         │                │ accepted_exam      │     │ probability_k      *NEW  │
+         │                │ ranking            │     └─────────────────────────┘
+         │                └─────────┬──────────┘
+         │                          │
+         ▼                          ▼
+  ┌──────────────────┐     ┌───────────────────────┐     ┌──────────────────────┐
+  │ profile_scores    │     │ college_cutoffs        │     │ cat_percentile_mapping│
+  │ student_id    FK  │     │ college_id        FK   │     │ year                  │
+  │ academic_score    │     │ year                   │     │ raw_score             │
+  │ exam_score        │     │ exam                   │     │ percentile             │
+  │ workex_score      │     │ category               │     │ approx_rank            │
+  │ leadership_score  │     │ cutoff_percentile      │     └──────────────────────┘
+  │ internship_score  │     └───────────────────────┘
+  │ total_score       │
+  │ category          │              ▼
+  └──────────┬────────┘     ┌────────────────────────────────────┐
+             └────────────▶│ target_score_results        *NEW    │
+                            │ student_id              FK         │
+                            │ college_id              FK         │
+                            │ composite_score                    │
+                            │ admission_probability               │
+                            │ required_cat_percentile             │
+                            │ required_cat_score                  │
+                            │ expected_rank                       │
+                            │ interview_assumed       (bool)       │
+                            │ classification (Dream/Target/Safe)   │
+                            │ calculated_at                       │
+                            └────────────────────────────────────┘
+7.2 Table: admission_criteria (extended)
+Column
+Type
+Notes
+id
+BIGINT, PK
+
+college_id
+BIGINT, FK → colleges.id
+
+exam_weight
+DECIMAL(4,3)
+Fraction, e.g. 0.650
+academic_weight
+DECIMAL(4,3)
+Fraction
+workex_weight
+DECIMAL(4,3)
+Fraction
+interview_weight
+DECIMAL(4,3)
+Fraction; 0 if college has no interview stage
+calibrated_threshold
+DECIMAL(5,2)  — NEW
+Composite-score equivalent of the college's cutoff; recomputed each admission cycle
+probability_k
+DECIMAL(4,3)  — NEW
+Per-college steepness constant; defaults to global 0.150 until tuned
+weights_sum_check
+DECIMAL(4,3)  — derived, validation only
+Must equal 1.000 ± 0.001; reject/flag row on insert if not
+updated_at
+TIMESTAMP
+
+7.3 Table: target_score_results (new)
+Stores the computed output per student-college pair so the Final Report and Dashboard (PRD §14–15) can read pre-computed results instead of recalculating on every page view.
+Column
+Type
+Notes
+id
+BIGINT, PK
+
+student_id
+BIGINT, FK → students.id
+
+college_id
+BIGINT, FK → colleges.id
+
+composite_score
+DECIMAL(5,2)
+Stage 1 output
+admission_probability
+DECIMAL(5,2)
+Stage 1 output, 0–100
+required_cat_percentile
+DECIMAL(5,2)
+Stage 2 output, clamped 50–99.9
+required_cat_score
+DECIMAL(6,2)
+Interpolated from cat_percentile_mapping
+expected_rank
+INT
+Interpolated
+interview_assumed
+BOOLEAN
+TRUE if interview_weight > 0 and no real score yet logged
+classification
+ENUM('Dream','Target','Safe')
+
+calculated_at
+TIMESTAMP
+Recalculate when profile_scores or admission_criteria changes
+7.4 Indexing Notes
+	•	Composite index on target_score_results (student_id, college_id) for fast report re-render.
+	•	Index on admission_criteria(college_id) — already implied by FK, called on every Stage 1 run.
+	•	cat_percentile_mapping should be indexed on (year, percentile) to make the interpolation lookup (§5.3) a fast range scan rather than a full table scan.
+8. Edge Cases & Validation Rules
+Edge Case
+Rule
+College weights in DB don't sum to 1.000
+Reject on data entry / flag in admin panel — never silently normalize at query time, since that masks data-entry errors (see PRD bug review).
+Back-solved CAT percentile > 99.9
+Clamp to 99.9 and explicitly label the college as mathematically capped below target probability, per §5.2.
+Back-solved CAT percentile < 50
+Clamp to 50 floor — a college this far below the student's profile should already classify as Safe; do not display percentiles that look like "go easier than the exam's lower bound".
+Student has no mock percentile yet
+Stage 1 uses category-default Exam Readiness score (10, per PRD §5) converted to an assumed percentile equivalent (~75th, the midpoint of the 'no mock' default band) — flagged in report as 'Estimated — take a mock for an accurate number.'
+Required percentile needed exceeds highest stored cat_percentile_mapping row
+Do not extrapolate past 99.9; show as a ceiling value (§5.3).
+College has interview_weight = 0 (e.g. IIM Ahmedabad)
+Interview_assumed term simply contributes 0 — no default of 70 is invented for colleges that don't use an interview stage.
+9. API Contract (for Engineering Handoff)
+9.1 POST /target-score/calculate
+Request:
+{
+  "student_id": 10234,
+  "college_ids": [101, 102],     // IIM Ahmedabad, IIM Bangalore
+  "target_probability": 0.80      // optional, defaults to 0.80
+}
+ 
+Response:
+{
+  "results": [
+    {
+      "college_id": 101,
+      "college_name": "IIM Ahmedabad",
+      "composite_score": 93.55,
+      "admission_probability": 55.8,
+      "required_cat_percentile": 99.9,
+      "required_cat_percentile_capped": true,
+      "required_cat_score": 120,
+      "expected_rank": 250,
+      "interview_assumed": false,
+      "classification": "Target"
+    },
+    {
+      "college_id": 102,
+      "college_name": "SPJIMR",
+      "composite_score": 89.0,
+      "admission_probability": 79.4,
+      "required_cat_percentile": 97.5,
+      "required_cat_percentile_capped": false,
+      "required_cat_score": 83,
+      "expected_rank": 7500,
+      "interview_assumed": true,
+      "classification": "Target"
+    }
+  ]
+}
+10. Traceability to PRD Success Criteria
+PRD §16 lists 10 questions the Profile Evaluator report must answer. This design satisfies all 10, with the college-specific questions (2, 3, 4) now genuinely varying per college rather than reusing one flat number.
+#
+PRD Question
+Answered by
+1
+How strong is my profile?
+Profile Scoring Engine (unchanged, PRD §5)
+2
+What CAT percentile should I target?
+Stage 2 back-solve, per college (§5)
+3
+What CAT score should I target?
+§5.3 interpolation
+4
+What rank should I target?
+§5.3 interpolation
+5–7
+Dream / Target / Safe classification
+Probability bands, §6
+8
+What are my weaknesses?
+Weakness Detection Engine, now college-aware (§3.1 Step 6)
+9
+What should I improve?
+Same, tied to which weight component is lowest at the chosen college
+10
+What should I do next?
+Final Report consultant-style summary, unchanged structurally (PRD §14)
+— End of Document —

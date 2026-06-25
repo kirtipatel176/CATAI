@@ -1,450 +1,558 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { motion, Variants } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
-  PlusCircle, 
-  Download,
-  FileText,
-  Calendar,
-  Award,
-  ChevronRight,
-  ChevronLeft,
-  Bot,
-  GraduationCap,
-  Briefcase,
-  Target,
-  ArrowRight
+  Bot, ChevronLeft, ChevronRight, FileText, Calendar, ArrowRight, Award, Target, AlertTriangle, Zap, Navigation, CheckCircle2, ShieldCheck, Brain
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { ProfileEngine, UserProfileInput, ProfileReport, EducationStage } from "@/lib/profile-engine";
+import { cn } from "@/lib/utils";
 
-// Animations
-const containerVariants: Variants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1, delayChildren: 0.1 }
+// Default Profile Input
+const defaultProfile: Partial<UserProfileInput> = {
+  educationStage: undefined,
+  reservationCategory: undefined,
+  gender: undefined,
+  percent10th: undefined,
+  percent12th: undefined,
+  graduationCGPA: undefined,
+  graduationStream: undefined,
+  targetExam: undefined,
+  attemptYear: undefined,
+  targetMBAColleges: [],
+  mockPercentile: undefined,
+  internshipCount: undefined,
+  workExperience: undefined,
+  leadershipExperience: undefined
+};
+
+type FieldConfig = {
+  id: keyof UserProfileInput;
+  label: string;
+  type: "number" | "text" | "options" | "multi-options";
+  options?: string[];
+  placeholder?: string;
+  optional?: boolean;
+  dependsOnStage?: EducationStage[]; // If provided, only show if educationStage is in this array
+};
+
+interface StoredReport {
+  id: string;
+  timestamp: number;
+  report: ProfileReport;
+}
+
+const allSteps: { title: string; subtitle: string; fields: FieldConfig[] }[] = [
+  {
+    title: "Start with Basics",
+    subtitle: "Tell us about your current status and background.",
+    fields: [
+      { id: "educationStage", label: "Current Status *", type: "options", options: ["12th Student", "Pursuing Bachelor's", "Completed Bachelor's", "Pursuing Master's", "Completed Master's", "Working Professional"] },
+      { id: "reservationCategory", label: "Category *", type: "options", options: ["General", "OBC-NCL", "SC", "ST", "EWS", "PwD"] },
+      { id: "gender", label: "Gender", type: "options", options: ["Male", "Female", "Other"], optional: true }
+    ]
+  },
+  {
+    title: "Academic Record",
+    subtitle: "Your past academic performance carries significant weight.",
+    fields: [
+      { id: "percent10th", label: "10th Percentage *", type: "number", placeholder: "0 - 100" },
+      { id: "percent12th", label: "12th / Expected 12th Percentage *", type: "number", placeholder: "0 - 100" },
+      { 
+        id: "graduationStream", 
+        label: "Graduation Stream *", 
+        type: "options", 
+        options: ["BBA", "B.Com", "BMS", "B.Tech", "BCA", "BA", "B.Sc", "Other"],
+        dependsOnStage: ["Pursuing Bachelor's", "Completed Bachelor's", "Pursuing Master's", "Completed Master's", "Working Professional"] 
+      },
+      { 
+        id: "graduationCGPA", 
+        label: "Bachelor CGPA (Current or Final) *", 
+        type: "number", 
+        placeholder: "0 - 10",
+        dependsOnStage: ["Pursuing Bachelor's", "Completed Bachelor's", "Pursuing Master's", "Completed Master's", "Working Professional"] 
+      }
+    ]
+  },
+  {
+    title: "Target Goals",
+    subtitle: "What are you aiming for?",
+    fields: [
+      { id: "targetExam", label: "Target Exam *", type: "options", options: ["CAT", "XAT", "SNAP", "NMAT", "CMAT"] },
+      { id: "attemptYear", label: "Attempt Year *", type: "options", options: ["2026", "2027", "2028", "2029"] },
+      { id: "targetMBAColleges", label: "Target MBA Colleges (Max 10) *", type: "multi-options", options: ["IIM Ahmedabad", "IIM Bangalore", "IIM Calcutta", "SPJIMR", "MDI Gurgaon", "IIFT", "IMI Delhi", "TAPMI", "FMS Delhi", "XLRI Jamshedpur"] },
+      { id: "mockPercentile", label: "Latest Mock Percentile", type: "number", placeholder: "Leave blank if not attempted", optional: true }
+    ]
+  },
+  {
+    title: "Experience & Leadership",
+    subtitle: "Professional exposure enhances your profile.",
+    fields: [
+      { 
+        id: "internshipCount", 
+        label: "Internships Completed", 
+        type: "options", 
+        options: ["0", "1", "2", "3+"], 
+        optional: true,
+        dependsOnStage: ["Pursuing Bachelor's", "Completed Bachelor's", "Pursuing Master's", "Completed Master's", "Working Professional"] 
+      },
+      { 
+        id: "workExperience", 
+        label: "Full-Time Work Experience", 
+        type: "options", 
+        options: ["0 Months", "1-6 Months", "6-12 Months", "12-24 Months", "24-36 Months", "36+ Months"], 
+        optional: true,
+        dependsOnStage: ["Completed Bachelor's", "Pursuing Master's", "Completed Master's", "Working Professional"]
+      },
+      { id: "leadershipExperience", label: "Leadership Experience", type: "options", options: ["Yes", "No"], optional: true }
+    ]
+  },
+  {
+    title: "Generate Intelligence",
+    subtitle: "Review your details and let AI analyze your profile.",
+    fields: []
   }
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }
-};
-
-const glassCardClass = "glass-liquid-elevated rounded-[24px]";
-const glassInputClass = "glass-liquid-sunken rounded-xl h-12 text-[#111827] dark:text-white border-transparent focus:border-[#7F77DD] focus:ring-[#7F77DD] placeholder:text-[color:var(--color-text-glass-tertiary)]";
-
-// Mock Data
-const mockHistoryData = Array.from({ length: 25 }, (_, i) => {
-  const versionNum = 25 - i;
-  return {
-    id: `v${versionNum}`,
-    name: `Profile Evaluation V${versionNum}`,
-    date: versionNum === 4 ? "15 June 2026" : versionNum === 3 ? "May 2026" : versionNum === 2 ? "Apr 2026" : `March 2026`,
-    score: versionNum === 4 ? 82 : versionNum === 3 ? 78 : versionNum === 2 ? 74 : 70 + (versionNum % 15)
-  };
-});
-// Re-arrange top 3 based on user request
-mockHistoryData[0] = { id: "v4", name: "Profile Evaluation V4", date: "15 June 2026", score: 82 };
-mockHistoryData[1] = { id: "v3", name: "Profile Evaluation V3", date: "May 2026", score: 78 };
-mockHistoryData[2] = { id: "v2", name: "Profile Evaluation V2", date: "Apr 2026", score: 74 };
+];
 
 export default function ProfileIntelligencePage() {
   const router = useRouter();
+  
+  // UI State
+  const [mounted, setMounted] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const [profile, setProfile] = useState<Partial<UserProfileInput>>(defaultProfile);
+  
+  const autoAdvanceTimeout = useRef<NodeJS.Timeout | null>(null);
+  
+  const [history, setHistory] = useState<StoredReport[]>([]);
+  
+  useEffect(() => {
+    setMounted(true);
+    // Load from local storage
+    const loaded: StoredReport[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("profile_report_")) {
+        const data = localStorage.getItem(key);
+        if (data) {
+          try {
+            const report = JSON.parse(data);
+            const idParts = key.split("rep_");
+            const timestamp = idParts.length > 1 ? parseInt(idParts[1]) : 0;
+            loaded.push({ id: key.replace("profile_report_", ""), timestamp, report });
+          } catch(e) {}
+        }
+      }
+    }
+    loaded.sort((a, b) => b.timestamp - a.timestamp);
+    setHistory(loaded);
+  }, []);
 
-  const ITEMS_PER_PAGE = 10;
-  const totalPages = Math.ceil(mockHistoryData.length / ITEMS_PER_PAGE);
+  const latestReport = history.length > 0 ? history[0].report : null;
+  const latestId = history.length > 0 ? history[0].id : null;
 
-  const currentHistory = mockHistoryData.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  // Filter fields based on the selected education stage
+  const currentStage = profile.educationStage as EducationStage | undefined;
+  
+  const dynamicSteps = allSteps.map(step => ({
+      ...step,
+      fields: step.fields.filter(f => !f.dependsOnStage || (currentStage && f.dependsOnStage.includes(currentStage)))
+  }));
 
-  const latestReport = mockHistoryData[0];
+  const safeStepIndex = Math.min(Math.max(0, currentStepIndex), dynamicSteps.length - 1);
+  const currentStep = dynamicSteps[safeStepIndex];
+  
+  const progressPercent = Math.round(((safeStepIndex + 1) / dynamicSteps.length) * 100);
 
-  const handleDownload = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    toast.success("Downloading Professional PDF...");
+  const validateCurrentStep = () => {
+    if (safeStepIndex === 0) {
+      if (!profile.educationStage) return "Current Status is required.";
+      if (!profile.reservationCategory) return "Category is required.";
+    }
+    if (safeStepIndex === 1) {
+      if (profile.percent10th === undefined || profile.percent10th === null || profile.percent10th <= 0 || profile.percent10th > 100) return "Valid 10th Percentage is required.";
+      if (profile.percent12th === undefined || profile.percent12th === null || profile.percent12th <= 0 || profile.percent12th > 100) return "Valid 12th Percentage is required.";
+      
+      const gradRequired = ["Pursuing Bachelor's", "Completed Bachelor's", "Pursuing Master's", "Completed Master's", "Working Professional"].includes(profile.educationStage || "");
+      if (gradRequired) {
+          if (!profile.graduationStream) return "Graduation Stream is required.";
+          if (profile.graduationCGPA === undefined || profile.graduationCGPA === null || profile.graduationCGPA <= 0 || profile.graduationCGPA > 10) return "Valid Bachelor CGPA is required (0-10).";
+      }
+    }
+    if (safeStepIndex === 2) {
+      if (!profile.targetExam) return "Target Exam is required.";
+      if (!profile.attemptYear) return "Attempt Year is required.";
+      if (!profile.targetMBAColleges || profile.targetMBAColleges.length === 0) return "Please select at least 1 Target MBA College.";
+    }
+    // Step 3 (Experience) is all optional fields
+    return null;
   };
 
-  const handleViewReport = (id: string) => {
-    router.push(`/profile-evaluator/report/${id}`);
+  const handleNext = () => {
+    if (autoAdvanceTimeout.current) {
+      clearTimeout(autoAdvanceTimeout.current);
+      autoAdvanceTimeout.current = null;
+    }
+
+    const error = validateCurrentStep();
+    if (error) {
+      toast.error(error);
+      return;
+    }
+
+    if (currentStepIndex < dynamicSteps.length - 1) {
+      setDirection(1);
+      setCurrentStepIndex(prev => Math.min(prev + 1, dynamicSteps.length - 1));
+    } else {
+      submitForm();
+    }
   };
+
+  const handleBack = () => {
+    if (autoAdvanceTimeout.current) {
+      clearTimeout(autoAdvanceTimeout.current);
+      autoAdvanceTimeout.current = null;
+    }
+
+    if (currentStepIndex > 0) {
+      setDirection(-1);
+      setCurrentStepIndex(prev => Math.max(prev - 1, 0));
+    }
+  };
+
+  const updateField = (field: keyof UserProfileInput, value: string | number | string[] | undefined) => {
+    const currentFieldConfig = currentStep.fields.find(f => f.id === field);
+    
+    if (currentFieldConfig && currentFieldConfig.type === "multi-options") {
+      setProfile(prev => {
+        const currentArr = (prev[field] as string[]) || [];
+        if (currentArr.includes(value as string)) {
+          return { ...prev, [field]: currentArr.filter(v => v !== value) };
+        } else {
+          // Limit to max 10
+          if (currentArr.length >= 10) {
+            toast.error("Maximum 10 colleges allowed.");
+            return prev;
+          }
+          return { ...prev, [field]: [...currentArr, value] };
+        }
+      });
+    } else {
+      setProfile(prev => ({ ...prev, [field]: value }));
+      if (currentFieldConfig && currentFieldConfig.type === "options") {
+        if (autoAdvanceTimeout.current) clearTimeout(autoAdvanceTimeout.current);
+        
+        const allFieldsFilled = currentStep.fields.every(f => {
+          if (f.id === field) return true; // currently updated field
+          const val = profile[f.id];
+          if (f.type === "multi-options") return Array.isArray(val) && val.length > 0;
+          return val !== undefined && val !== null && val !== "";
+        });
+
+        autoAdvanceTimeout.current = setTimeout(() => {
+          // Only auto advance if no validation errors on this step and all visible fields are filled
+          if (!validateCurrentStep() && allFieldsFilled) handleNext();
+        }, 400); 
+      }
+    }
+  };
+
+  const submitForm = () => {
+    const reportId = `rep_${Date.now()}`;
+    // Assign default 0s to fields that weren't rendered because of stage filtering (so the engine doesn't break)
+    const finalProfile: UserProfileInput = {
+        educationStage: profile.educationStage as EducationStage,
+        reservationCategory: profile.reservationCategory as string,
+        targetExam: profile.targetExam as string,
+        attemptYear: profile.attemptYear as string,
+        targetMBAColleges: profile.targetMBAColleges as string[],
+        percent10th: profile.percent10th || 0,
+        percent12th: profile.percent12th || 0,
+        graduationCGPA: profile.graduationCGPA || 0,
+        graduationStream: profile.graduationStream || "N/A",
+        mockPercentile: profile.mockPercentile,
+        internshipCount: profile.internshipCount,
+        workExperience: profile.workExperience,
+        leadershipExperience: profile.leadershipExperience,
+        gender: profile.gender
+    };
+    
+    const engine = new ProfileEngine(finalProfile);
+    const report = engine.generateReport();
+    localStorage.setItem(`profile_report_${reportId}`, JSON.stringify(report));
+    setIsWizardOpen(false);
+    toast.success("Intelligence Engine analyzing profile...");
+    router.push(`/profile-evaluator/report/${reportId}`);
+  };
+
+  // Fluid UI animations
+  const variants: any = {
+    enter: (direction: number) => ({ x: direction > 0 ? 40 : -40, opacity: 0, scale: 0.98 }),
+    center: { zIndex: 1, x: 0, opacity: 1, scale: 1, transition: { type: "spring", stiffness: 300, damping: 30 } },
+    exit: (direction: number) => ({ zIndex: 0, x: direction < 0 ? 40 : -40, opacity: 0, scale: 0.98, transition: { type: "spring", stiffness: 300, damping: 30 } })
+  };
+
+  if (!mounted) return null;
 
   return (
-    <div className="relative min-h-screen w-full pb-32 bg-[#F6F8FC] dark:bg-[#0A0A0A]">
-      {/* AMBIENT LAYERED GRADIENT BACKGROUND */}
-      <div className="fixed inset-0 z-[-1] liquid-bg overflow-hidden pointer-events-none"></div>
+    <div className="relative min-h-screen w-full pb-32 bg-[#FAFAFA] text-gray-900 selection:bg-indigo-500/20">
+      
+      {/* Background ambient glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden flex items-center justify-center">
+        <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] bg-indigo-200/50 blur-[120px] rounded-full mix-blend-multiply opacity-30"></div>
+      </div>
 
-      <motion.div 
-        className="pt-8 max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 space-y-12"
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-      >
-        {/* SECTION 1: PROFILE INTELLIGENCE HEADER */}
-        <motion.section variants={itemVariants} className="relative w-full rounded-[32px] overflow-hidden shadow-sm border border-black/5 dark:border-white/5 group">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#2563EB] via-[#4F46E5] to-[#7C3AED] z-0 opacity-95 transition-opacity group-hover:opacity-100 duration-500"></div>
-          <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-20 mix-blend-overlay z-0"></div>
+      {!isWizardOpen && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="relative z-10 pt-16 w-full max-w-[1000px] mx-auto px-4 sm:px-8 space-y-10">
           
-          <div className="relative z-10 flex flex-col md:flex-row h-full items-center justify-between p-8 md:p-12 gap-8">
-            <div className="flex flex-col justify-between w-full max-w-2xl space-y-6">
-              <div className="text-white">
-                <h1 className="text-3xl md:text-5xl font-semibold tracking-tight leading-tight mb-3">Profile Intelligence</h1>
-                <p className="text-white/80 text-base md:text-lg leading-relaxed max-w-xl">
-                  Generate and manage AI-powered MBA profile evaluations.
-                </p>
-              </div>
-
-              {/* Bottom Actions */}
-              <div className="flex flex-wrap items-center gap-3">
-                <button onClick={() => setIsWizardOpen(true)} className="btn-primary-gradient flex items-center shadow-sm">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Generate New Report
-                </button>
-                <button onClick={handleDownload} className="btn-secondary-tinted flex items-center">
-                  <Download className="mr-2 h-4 w-4" /> Download Latest Report
-                </button>
-              </div>
-            </div>
-
-            {/* Right Side: Latest Score Display */}
-            <div className="relative flex items-center justify-center shrink-0">
-              <div className="flex flex-col items-center justify-center text-white bg-white/10 backdrop-blur-md border border-white/20 p-8 rounded-3xl shadow-2xl">
-                <p className="text-xs text-white/70 uppercase tracking-widest font-semibold mb-2">Latest Score</p>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-6xl font-bold tracking-tighter">{latestReport.score}</span>
-                  <span className="text-lg text-white/60 font-medium">/ 100</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.section>
-
-        {/* SECTION 2: LATEST REPORT CARD */}
-        <motion.section variants={itemVariants} className="space-y-5">
-          <div className="flex items-center gap-3 pl-2">
-            <Award className="h-5 w-5 text-[#4F46E5]" />
-            <h2 className="text-lg font-semibold text-[#111827] dark:text-white tracking-tight">Latest Report</h2>
-          </div>
-          
-          <div className={`${glassCardClass} p-8 lg:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 hover:shadow-lg transition-shadow`}>
-            <div className="space-y-4 flex-1">
-              <div className="flex flex-wrap items-center gap-3">
-                <h3 className="text-2xl font-bold text-[#111827] dark:text-white">{latestReport.name}</h3>
-                <span className="px-3 py-1 bg-[#22C55E]/10 text-[#22C55E] text-xs font-bold uppercase tracking-wider rounded-full">Strong Profile</span>
-              </div>
-              <div className="flex items-center gap-6 text-[#6B7280] text-sm font-medium">
-                <div className="flex items-center gap-1.5"><Calendar className="h-4 w-4" /> Generated {latestReport.date}</div>
-                <div className="flex items-center gap-1.5"><Target className="h-4 w-4" /> Score: {latestReport.score} / 100</div>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              <button onClick={() => handleViewReport(latestReport.id)} className="btn-primary-gradient flex-1 md:flex-none shadow-md">
-                View Report
-              </button>
-              <button onClick={handleDownload} className="btn-secondary-tinted flex-1 md:flex-none flex items-center justify-center">
-                <Download className="h-4 w-4 mr-2" /> Download PDF
-              </button>
-            </div>
-          </div>
-        </motion.section>
-
-        {/* SECTION 3: REPORT HISTORY */}
-        <motion.section variants={itemVariants} className="space-y-5">
-          <div className="flex items-center gap-3 pl-2">
-            <FileText className="h-5 w-5 text-[#6B7280]" />
-            <h2 className="text-lg font-semibold text-[#111827] dark:text-white tracking-tight">Report History</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {currentHistory.map((report) => (
-              <div 
-                key={report.id} 
-                className={`${glassCardClass} p-6 flex flex-col gap-5 hover:border-[#4F46E5]/30 transition-colors group cursor-pointer`}
-                onClick={() => handleViewReport(report.id)}
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h4 className="text-base font-bold text-[#111827] dark:text-white mb-1">{report.name}</h4>
-                    <p className="text-xs font-medium text-[#6B7280] flex items-center gap-1">
-                      <Calendar className="h-3 w-3" /> Generated {report.date}
-                    </p>
-                  </div>
-                  <div className="bg-black/5 dark:bg-white/5 px-3 py-1.5 rounded-xl">
-                    <span className="text-lg font-bold text-[#111827] dark:text-white">{report.score}</span>
-                    <span className="text-[10px] text-[#6B7280] ml-1">/100</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 mt-auto pt-2 border-t border-black/5 dark:border-white/5">
-                  <Button variant="ghost" onClick={(e) => { e.stopPropagation(); handleViewReport(report.id); }} className="flex-1 h-10 rounded-xl text-sm font-semibold text-[#4F46E5] hover:bg-[#4F46E5]/10 bg-[#4F46E5]/5">
-                     View Report
-                  </Button>
-                  <Button variant="ghost" onClick={handleDownload} className="flex-1 h-10 rounded-xl text-sm font-semibold text-[#1D9E75] hover:bg-[#1D9E75]/10 bg-[#1D9E75]/5">
-                    <Download className="h-4 w-4 mr-1.5" /> PDF
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Premium Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-8">
-              <Button 
-                variant="outline" 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="h-10 px-4 rounded-full bg-white dark:bg-[#111827] border-black/5 dark:border-white/10 shadow-sm font-medium"
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-              </Button>
-              
-              <div className="flex items-center gap-1 bg-white dark:bg-[#111827] p-1.5 rounded-full border border-black/5 dark:border-white/10 shadow-sm">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`h-8 w-8 rounded-full text-sm font-bold transition-all ${
-                      currentPage === page 
-                        ? "bg-[#4F46E5] text-white shadow-md" 
-                        : "text-[#6B7280] hover:bg-black/5 dark:hover:bg-white/5 hover:text-[#111827] dark:hover:text-white"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-
-              <Button 
-                variant="outline" 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="h-10 px-4 rounded-full bg-white dark:bg-[#111827] border-black/5 dark:border-white/10 shadow-sm font-medium"
-              >
-                Next <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          )}
-        </motion.section>
-
-        {/* SECTION 4: GENERATE NEW REPORT (FLOATING PREMIUM CARD) */}
-        <motion.section variants={itemVariants} className="pt-8">
-          <div className="relative w-full rounded-[32px] overflow-hidden shadow-2xl shadow-[#4F46E5]/10 border border-[#4F46E5]/20 bg-gradient-to-r from-white to-[#F6F8FC] dark:from-[#111827] dark:to-[#0A0A0A]">
-            <div className="absolute right-0 top-0 w-1/2 h-full bg-gradient-to-l from-[#4F46E5]/10 to-transparent pointer-events-none"></div>
-            
-            <div className="relative z-10 flex flex-col md:flex-row items-center justify-between p-8 md:p-12 gap-8">
-              <div className="space-y-3">
-                <h3 className="text-2xl font-bold text-[#111827] dark:text-white flex items-center gap-2">
-                  <Bot className="h-6 w-6 text-[#4F46E5]" /> Create New Evaluation
-                </h3>
-                <p className="text-[#6B7280] text-base max-w-xl">
-                  Generate a fresh MBA profile analysis using your latest academic, professional, and mock test information.
-                </p>
-              </div>
-              <button onClick={() => setIsWizardOpen(true)} className="btn-primary-gradient w-full md:w-auto text-lg px-10 py-4 h-auto shadow-lg shadow-[#4F46E5]/30 shrink-0 flex items-center justify-center">
-                Create Report <ArrowRight className="ml-2 h-5 w-5" />
-              </button>
-            </div>
-          </div>
-        </motion.section>
-
-      </motion.div>
-
-      {/* CREATE REPORT WIZARD (FULL SCREEN) */}
-      <Dialog open={isWizardOpen} onOpenChange={setIsWizardOpen}>
-        <DialogContent className="max-w-[96vw] sm:max-w-[96vw] lg:max-w-[1280px] w-full h-[90vh] bg-white/90 dark:bg-[#0A0A0A]/90 backdrop-blur-3xl shadow-2xl rounded-[32px] p-0 overflow-hidden flex flex-col lg:flex-row border border-white/20 dark:border-white/10 gap-0">
-          
-          {/* Left Panel */}
-          <div className="hidden lg:flex lg:w-[380px] xl:w-[420px] shrink-0 bg-gradient-to-br from-[#2563EB] via-[#4F46E5] to-[#7C3AED] p-10 flex-col justify-between text-white relative overflow-hidden">
+          <div className="relative w-full rounded-[32px] overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-8 sm:p-12 md:p-16 text-white shadow-2xl border border-white/20">
             <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-20 mix-blend-overlay z-0"></div>
-            <div className="relative z-10">
-              <div className="h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-8 border border-white/30">
-                <Bot className="h-6 w-6 text-white" />
+            
+            <div className="relative z-10 flex flex-col items-center text-center max-w-2xl mx-auto">
+              <div className="h-16 w-16 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mb-6 shadow-xl border border-white/20">
+                <Brain className="h-8 w-8 text-white" />
               </div>
-              <h2 className="text-3xl font-bold tracking-tight mb-4">Profile Evaluation</h2>
-              <p className="text-white/80 text-sm leading-relaxed">
-                Provide your academic and professional details to get a highly accurate, AI-driven analysis of your MBA admission chances.
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-extrabold tracking-tight leading-tight mb-6">Profile Intelligence</h1>
+              <p className="text-white/90 text-lg md:text-xl font-medium mb-10 leading-relaxed">
+                Discover your exact college admit probabilities using our proprietary admission intelligence engine. Find your dream, target, and safe schools.
               </p>
-            </div>
-
-            <div className="relative z-10 space-y-8 mt-12 flex-1">
-              {[
-                { step: 1, label: "Academics", icon: GraduationCap },
-                { step: 2, label: "Work Experience", icon: Briefcase },
-                { step: 3, label: "Achievements", icon: Award },
-                { step: 4, label: "MBA Goals", icon: Target },
-              ].map((s) => (
-                <div key={s.step} className={`flex items-center gap-4 ${wizardStep >= s.step ? 'opacity-100' : 'opacity-50'}`}>
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm border-2 ${wizardStep >= s.step ? 'bg-white text-[#4F46E5] border-white' : 'border-white/30 text-white'}`}>
-                    <s.icon className="h-4 w-4" />
-                  </div>
-                  <span className="font-medium text-lg">{s.label}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="relative z-10 mt-auto pt-8">
-              <div className="bg-white/10 rounded-xl p-4 border border-white/20 backdrop-blur-md">
-                <p className="text-xs text-white/80 font-medium leading-relaxed">Your data is secured and only used for your personal admission analysis.</p>
-              </div>
+              <button 
+                onClick={() => setIsWizardOpen(true)} 
+                className="bg-white text-indigo-600 hover:scale-105 px-10 py-5 rounded-full font-bold text-lg shadow-2xl transition-all flex items-center gap-3"
+              >
+                {latestReport ? 'Recalculate Profile' : 'Start Intelligent Assessment'} <ArrowRight className="h-5 w-5" />
+              </button>
             </div>
           </div>
 
-          {/* Right Panel - Form Content */}
-          <div className="flex-1 flex flex-col h-full bg-transparent overflow-hidden relative">
-            <div className="flex-1 overflow-y-auto p-6 md:p-10 lg:p-14 custom-scrollbar">
-              
-              <div className="lg:hidden text-center space-y-2 mb-8 mt-4">
-                <h2 className="text-2xl font-semibold tracking-tight text-[#111827] dark:text-white">Profile Evaluation</h2>
-                <p className="text-[#6B7280] text-sm">Update your details to generate an accurate analysis.</p>
-              </div>
+          {latestReport && latestId && (
+            <section className="space-y-6 pt-10">
+               <div className="flex items-center justify-between">
+                 <h2 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
+                   <Target className="h-6 w-6 text-indigo-500" /> Your Current Standing
+                 </h2>
+                 <Button variant="ghost" onClick={() => router.push(`/profile-evaluator/report/${latestId}`)} className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-bold">
+                   Open Full Report <ArrowRight className="ml-2 h-4 w-4" />
+                 </Button>
+               </div>
+               
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 {/* Score Card */}
+                 <div className="bg-white rounded-[24px] p-8 border border-gray-200 shadow-sm hover:shadow-md transition-all group cursor-pointer" onClick={() => router.push(`/profile-evaluator/report/${latestId}`)}>
+                   <p className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">Overall Score</p>
+                   <p className="text-6xl font-black text-gray-900 mb-2">{latestReport.overallScore}<span className="text-2xl text-gray-400">/100</span></p>
+                   <p className="text-indigo-600 font-bold text-lg">{latestReport.profileCategory}</p>
+                 </div>
 
-              <div className="w-full space-y-12">
-                
-                {/* STEP 1: ACADEMICS */}
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-black/5 dark:border-white/5 pb-3">
-                    <div className="lg:hidden h-8 w-8 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-xs">1</div>
-                    <h3 className="text-xl font-semibold text-[#111827] dark:text-white flex items-center gap-2"><GraduationCap className="h-6 w-6 text-[#2563EB] lg:hidden" /> Academics</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">10th Percentage</Label>
-                      <Input placeholder="e.g. 92.5" className={glassInputClass} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">12th Percentage</Label>
-                      <Input placeholder="e.g. 90.0" className={glassInputClass} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Graduation Score</Label>
-                      <Input placeholder="e.g. 8.5 CGPA" className={glassInputClass} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Graduation Stream</Label>
-                      <Input placeholder="e.g. Engineering" className={glassInputClass} />
-                    </div>
-                  </div>
-                </div>
+                 {/* Top Weaknesses */}
+                 <div className="md:col-span-2 bg-white rounded-[24px] p-8 border border-gray-200 shadow-sm">
+                   <div className="flex items-center gap-3 mb-6">
+                     <AlertTriangle className="h-5 w-5 text-rose-500" />
+                     <h3 className="text-lg font-bold text-gray-900">Critical Weaknesses</h3>
+                   </div>
+                   {latestReport.weaknesses.length > 0 ? (
+                     <div className="grid sm:grid-cols-2 gap-4">
+                       {latestReport.weaknesses.slice(0, 2).map((w, i) => (
+                         <div key={i} className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                           <div className="flex justify-between items-start mb-2">
+                             <span className="font-bold text-gray-900">{w.weakness}</span>
+                             <span className="text-xs font-bold text-rose-600 bg-rose-100 px-2 py-1 rounded-full">{w.severity}</span>
+                           </div>
+                           <p className="text-xs text-gray-500 line-clamp-2">{w.impact}</p>
+                         </div>
+                       ))}
+                     </div>
+                   ) : (
+                     <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex items-center gap-3">
+                       <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                       <p className="text-sm text-emerald-700 font-medium">No major weaknesses detected. Solid profile!</p>
+                     </div>
+                   )}
+                 </div>
+               </div>
+            </section>
+          )}
+        </motion.div>
+      )}
 
-                {/* STEP 2: WORK EXPERIENCE */}
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-black/5 dark:border-white/5 pb-3">
-                    <div className="lg:hidden h-8 w-8 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-xs">2</div>
-                    <h3 className="text-xl font-semibold text-[#111827] dark:text-white flex items-center gap-2"><Briefcase className="h-6 w-6 text-[#2563EB] lg:hidden" /> Work Experience</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-5">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Status</Label>
-                      <select className={`w-full px-3 py-2 ${glassInputClass}`}>
-                        <option>Experienced</option>
-                        <option>Fresher</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Experience Months</Label>
-                      <Input placeholder="e.g. 24" className={glassInputClass} />
-                    </div>
-                    <div className="space-y-2 md:col-span-1 xl:col-span-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Current Role</Label>
-                      <Input placeholder="e.g. Data Analyst" className={glassInputClass} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* STEP 3: ACHIEVEMENTS */}
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3 border-b border-black/5 dark:border-white/5 pb-3">
-                    <div className="lg:hidden h-8 w-8 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-xs">3</div>
-                    <h3 className="text-xl font-semibold text-[#111827] dark:text-white flex items-center gap-2"><Award className="h-6 w-6 text-[#2563EB] lg:hidden" /> Achievements</h3>
-                  </div>
-                  <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Certifications</Label>
-                      <Input placeholder="e.g. CFA L1, AWS Solutions" className={glassInputClass} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Leadership Activities</Label>
-                      <Input placeholder="e.g. College Fest Head" className={glassInputClass} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Competitions</Label>
-                      <Input placeholder="e.g. Hackathon Winner" className={glassInputClass} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* STEP 4: GOALS */}
-                <div className="space-y-6 pb-4">
-                  <div className="flex items-center gap-3 border-b border-black/5 dark:border-white/5 pb-3">
-                    <div className="lg:hidden h-8 w-8 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-xs">4</div>
-                    <h3 className="text-xl font-semibold text-[#111827] dark:text-white flex items-center gap-2"><Target className="h-6 w-6 text-[#2563EB] lg:hidden" /> MBA Goals</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-5">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Target Exam</Label>
-                      <select className={`w-full px-3 py-2 ${glassInputClass}`}>
-                        <option>CAT</option>
-                        <option>XAT</option>
-                        <option>SNAP</option>
-                        <option>NMAT</option>
-                        <option>CMAT</option>
-                        <option>GMAT</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Target Percentile</Label>
-                      <Input placeholder="e.g. 99.5" className={glassInputClass} />
-                    </div>
-                    <div className="space-y-2 md:col-span-1 xl:col-span-2">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-[#6B7280]">Target Colleges</Label>
-                      <Input placeholder="e.g. IIM Ahmedabad" className={glassInputClass} />
-                    </div>
-                  </div>
-                </div>
-
+      <AnimatePresence>
+        {isWizardOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-[#FAFAFA]/95 backdrop-blur-xl flex flex-col"
+          >
+            <div className="w-full max-w-4xl mx-auto pt-8 px-6 shrink-0">
+              <div className="flex items-center justify-between mb-8">
+                <Button variant="ghost" onClick={() => setIsWizardOpen(false)} className="text-gray-500 hover:text-gray-900 -ml-4 rounded-full font-semibold">
+                   Cancel Assessment
+                </Button>
+                <div className="text-sm font-bold text-gray-400 tracking-widest uppercase">Step {currentStepIndex + 1} of {dynamicSteps.length}</div>
               </div>
               
+              <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden relative">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPercent}%` }}
+                  className="absolute top-0 left-0 h-full bg-indigo-600 shadow-[0_0_10px_rgba(79,70,229,0.5)] rounded-full"
+                  transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                />
+              </div>
             </div>
 
-            {/* Sticky Footer Actions */}
-            <div className="shrink-0 p-6 md:px-10 lg:px-14 bg-white/80 dark:bg-[#0A0A0A]/80 backdrop-blur-xl border-t border-black/5 dark:border-white/5 flex justify-end gap-4 z-10 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+            <div className="flex-1 overflow-y-auto flex flex-col max-w-3xl mx-auto w-full px-6 py-12 relative">
+              <AnimatePresence custom={direction} mode="wait">
+                <motion.div
+                  key={currentStepIndex}
+                  custom={direction}
+                  variants={variants}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  className="w-full flex-1 flex flex-col justify-center pb-20"
+                >
+                  <div className="mb-10 text-center">
+                    <h2 className="text-4xl font-black text-gray-900 mb-3 tracking-tight">
+                      {currentStep.title}
+                    </h2>
+                    <p className="text-gray-500 text-lg font-medium">{currentStep.subtitle}</p>
+                  </div>
+
+                  {safeStepIndex === dynamicSteps.length - 1 ? (
+                    <div className="space-y-6 max-w-2xl mx-auto w-full">
+                      <div className="bg-white rounded-3xl p-8 border border-gray-200 shadow-xl space-y-6">
+                        
+                        <div className="flex items-center gap-4 border-b border-gray-100 pb-6">
+                          <div className="h-12 w-12 rounded-full bg-indigo-50 flex items-center justify-center border border-indigo-100">
+                            <ShieldCheck className="h-6 w-6 text-indigo-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-900 text-xl">Data Verified</h3>
+                            <p className="text-sm text-gray-500">Ready for intelligence processing</p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-y-4">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 font-medium">Demographics</span>
+                            <span className="font-bold text-gray-900">{profile.reservationCategory} • {profile.gender || "Not specified"}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 font-medium">Academics</span>
+                            <span className="font-bold text-gray-900">{profile.percent10th}% (10th) • {profile.percent12th}% (12th)</span>
+                          </div>
+                          {(profile.graduationCGPA || profile.graduationStream) && (
+                             <div className="flex justify-between items-center">
+                               <span className="text-gray-500 font-medium">Graduation</span>
+                               <span className="font-bold text-gray-900">{profile.graduationCGPA} CGPA ({profile.graduationStream})</span>
+                             </div>
+                          )}
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 font-medium">Target</span>
+                            <span className="font-bold text-gray-900">{profile.targetExam} {profile.attemptYear} • {profile.targetMBAColleges?.length} Colleges</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 font-medium">Experience</span>
+                            <span className="font-bold text-gray-900 text-right">
+                              {profile.workExperience && profile.workExperience !== "0 Months" ? profile.workExperience : "No Work Ex"}
+                              <br/>
+                              <span className="text-xs text-gray-500">{profile.internshipCount || "0"} Internships</span>
+                            </span>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-10 max-w-2xl mx-auto w-full">
+                      {currentStep.fields.map(field => (
+                        <div key={field.id} className="space-y-4">
+                          <label className="text-base font-bold text-gray-700 flex items-center justify-between">
+                            {field.label}
+                            {field.optional && <span className="text-xs font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-1 rounded">Optional</span>}
+                          </label>
+                          
+                          {(field.type === "options" || field.type === "multi-options") && field.options && (
+                            <div className="flex flex-wrap gap-3">
+                              {field.options.map(opt => {
+                                let isSelected = false;
+                                if (field.type === "multi-options") {
+                                  const arr = (profile[field.id] as string[]) || [];
+                                  isSelected = arr.includes(opt);
+                                } else {
+                                  isSelected = profile[field.id] === opt;
+                                }
+                                return (
+                                  <button
+                                    key={opt}
+                                    onClick={() => updateField(field.id, opt)}
+                                    className={`px-5 py-3 rounded-xl border-2 transition-all duration-200 font-bold text-sm ${
+                                      isSelected 
+                                        ? "border-indigo-600 bg-indigo-600 text-white shadow-md scale-[1.02]" 
+                                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                                    }`}
+                                  >
+                                    {opt}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {(field.type === "text" || field.type === "number") && (
+                            <Input 
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              value={profile[field.id] === undefined ? "" : (profile[field.id] as any)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateField(field.id, field.type === "number" ? (val === "" ? undefined : Number(val)) : val);
+                              }}
+                              onKeyDown={(e) => { if (e.key === "Enter") handleNext(); }}
+                              className="h-16 rounded-xl bg-white border-2 border-gray-200 focus:border-indigo-600 focus:ring-0 text-xl px-6 shadow-sm text-gray-900 placeholder:text-gray-300 font-bold transition-all"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            <div className="w-full max-w-4xl mx-auto p-6 flex items-center justify-between shrink-0 bg-white/80 backdrop-blur-md border-t border-gray-200">
               <Button 
-                variant="ghost"
-                onClick={() => setIsWizardOpen(false)}
-                className="text-[#6B7280] hover:text-[#111827] dark:hover:text-white h-12 px-6 rounded-xl font-medium"
+                variant="ghost" 
+                onClick={handleBack} 
+                disabled={currentStepIndex === 0}
+                className={`h-14 px-6 rounded-full text-base font-bold transition-all ${currentStepIndex === 0 ? 'opacity-0 pointer-events-none' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
               >
-                Cancel
+                <ChevronLeft className="mr-2 h-5 w-5" /> Back
               </Button>
+              
               <Button 
-                onClick={() => {
-                  setIsWizardOpen(false);
-                  router.push(`/profile-evaluator/report/v5`);
-                }}
-                className="bg-gradient-to-r from-[#2563EB] to-[#4F46E5] hover:opacity-90 text-white rounded-xl h-12 px-8 font-medium shadow-lg shadow-[#2563EB]/20 transition-all active:scale-95"
+                onClick={handleNext}
+                className="h-14 px-8 rounded-full bg-gray-900 text-white text-base font-black hover:bg-black hover:scale-105 transition-all shadow-lg"
               >
-                <Bot className="h-4 w-4 mr-2" />
-                Generate Report
+                {currentStepIndex === dynamicSteps.length - 1 ? (
+                  <>Generate Report <Bot className="ml-2 h-5 w-5" /></>
+                ) : (
+                  <>Continue <ChevronRight className="ml-2 h-5 w-5" /></>
+                )}
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

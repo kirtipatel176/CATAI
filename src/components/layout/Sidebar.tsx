@@ -4,13 +4,18 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  LayoutDashboard, 
-  MessageSquare, 
-  UserCheck, 
-  CalendarDays, 
+import {
+  LayoutDashboard,
+  MessageSquare,
+  UserCheck,
+  CalendarDays,
   Settings,
-  ChevronRight
+  ChevronRight,
+  BookOpen,
+  AlertCircle,
+  Target,
+  BarChart3,
+  Building2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +29,11 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
 
   const appNavigation = [
     { name: "Mission Control", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Colleges", href: "/colleges", icon: Building2 },
+    { name: "Mock Library", href: "/mocks", icon: BookOpen },
+    { name: "Practice Center", href: "/practice", icon: Target },
+    { name: "Error Log", href: "/error-log", icon: AlertCircle },
+    { name: "Analytics", href: "/analytics", icon: BarChart3 },
     { name: "CATGPT", href: "/catgpt", icon: MessageSquare },
     { name: "Profile Intelligence", href: "/profile-evaluator", icon: UserCheck },
     { name: "Planning", href: "/study-planner", icon: CalendarDays },
@@ -41,9 +51,9 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
   const navigation = isAdmin ? adminNavigation : appNavigation;
 
   return (
-    <motion.div 
+    <motion.div
       initial={false}
-      animate={{ 
+      animate={{
         width: isCollapsed ? 64 : 210,
       }}
       transition={{ ease: [0.4, 0, 0.2, 1], duration: 0.32 }}
@@ -77,12 +87,12 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
 
       {/* MAIN NAVIGATION */}
       <div className="relative z-20 flex-1 overflow-y-auto overflow-x-hidden pt-8 pb-4 flex flex-col custom-scrollbar">
-        
+
         {/* Section Divider */}
         <div className="px-4 mb-2 flex items-center">
           <AnimatePresence>
             {!isCollapsed && (
-              <motion.span 
+              <motion.span
                 initial={{ opacity: 0, width: 0 }}
                 animate={{ opacity: 1, width: "auto" }}
                 exit={{ opacity: 0, width: 0 }}
@@ -99,7 +109,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
           {navigation.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
-            
+
             return (
               <Link
                 key={item.name}
@@ -121,8 +131,8 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
                   <Icon
                     className={cn(
                       "h-5 w-5 flex-shrink-0 relative z-10",
-                      isActive 
-                        ? "text-[#F97316]" 
+                      isActive
+                        ? "text-[#F97316]"
                         : "text-[#B4B2A9] group-hover:text-[#F97316]"
                     )}
                   />
@@ -150,9 +160,9 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
 
       {/* USER FOOTER */}
       <div className="relative z-20 mt-auto p-4 border-t-[0.5px] border-[rgba(0,0,0,0.07)] bg-transparent">
-        <Link href="/profile" className="flex items-center gap-3 group outline-none">
+        <Link href="/settings" className="flex items-center gap-3 group outline-none">
           <div className="relative shrink-0">
-            <div 
+            <div
               className="w-10 h-10 rounded-full shadow-sm flex items-center justify-center text-white font-bold text-sm"
               style={{ background: "linear-gradient(135deg, #FDBA74, #F472B6)" }}
             >
@@ -161,7 +171,7 @@ export function Sidebar({ isAdmin = false }: SidebarProps) {
             {/* Online Status Dot */}
             <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#10B981] rounded-full border-[2px] border-white shadow-sm" />
           </div>
-          
+
           <AnimatePresence>
             {!isCollapsed && (
               <motion.div

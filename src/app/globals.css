@@ -76,78 +76,42 @@
 }
 
 :root {
-  --background: #F7F8FA;
+  --background: #F8FAFC;
   --foreground: #111827;
   --card: rgba(255, 255, 255, 0.85);
   --card-foreground: #111827;
   --popover: #FFFFFF;
   --popover-foreground: #111827;
-  --primary: #4F46E5;
+  --primary: #3B82F6;
   --primary-foreground: #FFFFFF;
-  --secondary: #2563EB;
+  --secondary: #6366F1;
   --secondary-foreground: #FFFFFF;
   --muted: #F3F4F6;
   --muted-foreground: #6B7280;
-  --accent: #F3F4F6;
+  --accent: #8B5CF6;
   --accent-foreground: #111827;
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
   --border: #E5E7EB;
   --input: #E5E7EB;
-  --ring: #4F46E5;
+  --ring: #3B82F6;
   --success: #22C55E;
-  --warning: #F59E0B;
+  --warning: #FDBA74;
+  --highlight: #FB923C;
   --chart-1: #3B82F6;
   --chart-2: #8B5CF6;
   --chart-3: #06B6D4;
   --chart-4: #EC4899;
   --chart-5: #F59E0B;
   --radius: 1rem;
-  --sidebar: #FAFAFA;
+  --sidebar: #FFFFFF;
   --sidebar-foreground: #111827;
-  --sidebar-primary: #4F46E5;
+  --sidebar-primary: #3B82F6;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #F3F4F6;
   --sidebar-accent-foreground: #111827;
   --sidebar-border: #E5E7EB;
-  --sidebar-ring: #4F46E5;
-}
-
-.dark {
-  --background: #030712;
-  --foreground: #F9FAFB;
-  --card: #111827;
-  --card-foreground: #F9FAFB;
-  --popover: #111827;
-  --popover-foreground: #F9FAFB;
-  --primary: #4F46E5;
-  --primary-foreground: #FFFFFF;
-  --secondary: #2563EB;
-  --secondary-foreground: #FFFFFF;
-  --muted: #1F2937;
-  --muted-foreground: #9CA3AF;
-  --accent: #1F2937;
-  --accent-foreground: #F9FAFB;
-  --destructive: #7f1d1d;
-  --destructive-foreground: #F9FAFB;
-  --border: #1F2937;
-  --input: #1F2937;
-  --ring: #4F46E5;
-  --success: #22C55E;
-  --warning: #F59E0B;
-  --chart-1: #3B82F6;
-  --chart-2: #8B5CF6;
-  --chart-3: #06B6D4;
-  --chart-4: #EC4899;
-  --chart-5: #F59E0B;
-  --sidebar: #030712;
-  --sidebar-foreground: #F9FAFB;
-  --sidebar-primary: #4F46E5;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1F2937;
-  --sidebar-accent-foreground: #F9FAFB;
-  --sidebar-border: #1F2937;
-  --sidebar-ring: #4F46E5;
+  --sidebar-ring: #3B82F6;
 }
 
 @layer base {
@@ -166,14 +130,25 @@
 
 @layer utilities {
   .bg-premium-gradient {
-    background-image: linear-gradient(135deg, #2563EB, #4F46E5, #7C3AED);
+    background-image: linear-gradient(135deg, #3B82F6, #6366F1, #8B5CF6);
+  }
+
+  .bg-secondary-gradient {
+    background-image: linear-gradient(135deg, #6366F1, #8B5CF6, #FB923C);
   }
 
   .text-premium-gradient {
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    background-image: linear-gradient(135deg, #2563EB, #4F46E5, #7C3AED);
+    background-image: linear-gradient(135deg, #3B82F6, #6366F1, #8B5CF6);
+  }
+
+  .text-secondary-gradient {
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-image: linear-gradient(135deg, #6366F1, #8B5CF6, #FB923C);
   }
 
   .shadow-apple-soft {
@@ -210,33 +185,7 @@
     }
   }
 
-  /* ORB MESH BACKGROUND */
-  .bg-orb-mesh {
-    background-color: #FAFAF8;
-  }
-  
-  .bg-orb-mesh::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background: 
-      radial-gradient(ellipse 60% 50% at 15% 10%, rgba(253,186,116,.28) 0%, transparent 65%), 
-      radial-gradient(ellipse 50% 60% at 85% 20%, rgba(196,181,253,.22) 0%, transparent 60%), 
-      radial-gradient(ellipse 55% 45% at 50% 90%, rgba(167,243,208,.20) 0%, transparent 60%), 
-      radial-gradient(ellipse 40% 50% at 80% 75%, rgba(253,164,175,.18) 0%, transparent 55%);
-    animation: orb-shift 12s ease-in-out infinite alternate;
-  }
-
-  @keyframes orb-shift {
-    0% {
-      background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%;
-    }
-    100% {
-      background-position: 8% 8%, -8% -8%, -8% 8%, 8% -8%;
-    }
-  }
+  /* ORB MESH BACKGROUND IS REPLACED BY ANIMATED BACKGROUND COMPONENT */
 
   /* EXTREME GLASSMORPHISM */
   .glass-panel {

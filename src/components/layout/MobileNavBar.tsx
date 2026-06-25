@@ -7,7 +7,8 @@ import {
   MessageSquare, 
   UserCheck, 
   CalendarDays, 
-  Settings 
+  Settings,
+  BookOpen
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -27,7 +28,8 @@ export function MobileNavBar() {
     { name: "Mission", href: "/dashboard", icon: LayoutDashboard },
     { name: "CATGPT", href: "/catgpt", icon: MessageSquare },
     { name: "Profile", href: "/profile-evaluator", icon: UserCheck },
-    { name: "Colleges", href: "/study-planner", icon: CalendarDays },
+    { name: "Planning", href: "/study-planner", icon: CalendarDays },
+    { name: "Mocks", href: "/mocks", icon: BookOpen },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
