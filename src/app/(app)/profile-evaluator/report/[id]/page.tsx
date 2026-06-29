@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { ProfileReport, Weakness } from "@/lib/profile-engine";
-
+import api from "@/lib/api";
+type ProfileReport = any;
 // ─── Motion Variants ──────────────────────────────────────────────────────────
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -68,13 +68,25 @@ export default function ReportViewPage() {
   const [mounted, setMounted] = useState(false);
   const [report, setReport] = useState<ProfileReport | null>(null);
 
-  useEffect(() => {
-    setMounted(true);
-    const saved = localStorage.getItem(`profile_report_${reportId}`);
-    if (saved) {
-      try { setReport(JSON.parse(saved)); } catch { /* ignore */ }
+useEffect(() => {
+  setMounted(true);
+
+  const loadReport = async () => {
+    try {
+      const res = await api.get(
+        `/profile-evaluator/${reportId}`
+      );
+
+      console.log(res.data);
+
+      setReport(res.data);
+    } catch (err) {
+      console.error(err);
     }
-  }, [reportId]);
+  };
+
+  loadReport();
+}, [reportId]);
 
   const handleDownload = async () => {
     if (!reportRef.current) return;
@@ -109,8 +121,11 @@ export default function ReportViewPage() {
     );
   }
 
-  const allColleges = [...report.collegeMatches.dream, ...report.collegeMatches.target, ...report.collegeMatches.safe];
-
+const allColleges = [
+  ...(report.collegesuitability?.dream ?? []),
+  ...(report.collegesuitability?.target ?? []),
+  ...(report.collegesuitability?.safe ?? []),
+];
   return (
     <div className="min-h-screen w-full pb-32 bg-[#F8FAFC] dark:bg-[#0A0A0A]">
 
@@ -145,13 +160,13 @@ export default function ReportViewPage() {
                       Profile Intelligence Report
                     </p>
                     <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3">
-                      {report.profileCategory}
+                      {report.profilesummary}
                     </h1>
                     <p className="text-white/75 text-base max-w-lg">Based on standard MBA admissions scoring criteria.</p>
                   </div>
                   <div className="shrink-0 flex flex-col items-end justify-center gap-1">
                     <p className="text-white/60 text-xs uppercase tracking-widest">Total Score</p>
-                    <p className="text-7xl font-black leading-none">{report.overallScore}</p>
+                    <p className="text-7xl font-black leading-none">{report.overallscore}</p>
                     <p className="text-white/50 text-sm">out of 100</p>
                   </div>
                 </div>
@@ -159,23 +174,24 @@ export default function ReportViewPage() {
                 <div className="mt-10 pt-8 border-t border-white/15 grid grid-cols-2 sm:grid-cols-5 gap-6">
                   <div>
                     <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Academics</p>
-                    <p className="font-semibold">{report.academicScore} / 50</p>
-                  </div>
+<p className="font-semibold">
+    {report.overallscore} / 100
+</p>                  </div>
                   <div>
                     <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Exam</p>
-                    <p className="font-semibold">{report.examScore} / 25</p>
+                    <p className="font-semibold">{0} / 25</p>
                   </div>
                   <div>
                     <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Internship</p>
-                    <p className="font-semibold">{report.internshipScore} / 10</p>
+                    <p className="font-semibold">{0} / 10</p>
                   </div>
                   <div>
                     <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Work Ex</p>
-                    <p className="font-semibold">{report.workExScore} / 10</p>
+                    <p className="font-semibold">{0} / 10</p>
                   </div>
                   <div>
                     <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Leadership</p>
-                    <p className="font-semibold">{report.leadershipScore} / 5</p>
+                    <p className="font-semibold">{0} / 5</p>
                   </div>
                 </div>
               </div>
@@ -194,27 +210,24 @@ export default function ReportViewPage() {
               <div className="bg-black/[0.02] dark:bg-white/[0.02] p-5 rounded-2xl border border-black/5 dark:border-white/5">
                 <p className="text-sm font-bold text-[#111827] dark:text-white mb-2">Strengths</p>
                 <p className="text-sm text-[#4B5563] dark:text-[#9CA3AF]">
-                  {report.academicScore >= 40 ? "Excellent academic record across the board." : report.academicScore >= 30 ? "Solid academic foundation, meeting most general cutoffs." : "Academics meet minimum criteria but may not stand out."}
-                </p>
+{report.academicanalysis}                </p>
               </div>
               <div className="bg-black/[0.02] dark:bg-white/[0.02] p-5 rounded-2xl border border-black/5 dark:border-white/5">
                 <p className="text-sm font-bold text-[#111827] dark:text-white mb-2">Weaknesses</p>
                 <p className="text-sm text-[#4B5563] dark:text-[#9CA3AF]">
-                  {report.academicScore < 35 ? "Lower scores may require a higher entrance exam percentile to compensate." : "No significant academic weaknesses."}
-                </p>
+{report.gapanalysis}                </p>
               </div>
               <div className="bg-black/[0.02] dark:bg-white/[0.02] p-5 rounded-2xl border border-black/5 dark:border-white/5">
                 <p className="text-sm font-bold text-[#111827] dark:text-white mb-2">Consistency Analysis</p>
                 <p className="text-sm text-[#4B5563] dark:text-[#9CA3AF]">
-                  {report.academicScore >= 42 ? "Highly consistent performance across 10th, 12th, and Graduation." : "Some variance in academic performance across different stages."}
-                </p>
+{report.profilesummary}                </p>
               </div>
             </div>
           </motion.section>
 
           {/* ══ SECTIONS 3, 4, 5: COLLEGE PROBABILITIES ══ */}
           {(["dream", "target", "safe"] as const).map((tier, index) => {
-            const colleges = report.collegeMatches[tier];
+            const colleges = report.collegesuitability[tier];
             if (colleges.length === 0) return null;
             const config = {
               dream:  { label: "Section 3: Dream Colleges",  border: "border-[#2563EB]", color: "text-[#2563EB]",  desc: "Probability < 50%" },
@@ -235,20 +248,38 @@ export default function ReportViewPage() {
                 </div>
                 <div className={`${card} p-6 border-l-4 ${config.border}`}>
                   <div className="space-y-3">
-                    {colleges.map((c, i) => (
-                      <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-black/[0.025] dark:bg-white/[0.025] rounded-xl border border-black/5 dark:border-white/5 gap-3">
-                        <div>
-                          <p className="font-bold text-[#111827] dark:text-white">{c.name}</p>
-                          <p className="text-xs text-[#6B7280] mt-0.5">Tier {c.tier}</p>
-                        </div>
-                        <div className="flex items-center gap-6 shrink-0">
-                          <div className="text-right min-w-[60px]">
-                            <p className="text-xs text-[#6B7280] mb-1">Probability</p>
-                            <p className={`font-black text-lg ${config.color}`}>{c.match}%</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+  {colleges.map((c: string, i: number) => (
+  <div
+    key={i}
+    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-black/[0.025] dark:bg-white/[0.025] rounded-xl border border-black/5 dark:border-white/5 gap-3"
+  >
+    <div>
+      <p className="font-bold text-[#111827] dark:text-white">
+        {c}
+      </p>
+
+      <p className="text-xs text-[#6B7280] mt-0.5">
+        MBA College
+      </p>
+    </div>
+
+    <div className="flex items-center gap-6 shrink-0">
+      <div className="text-right min-w-[60px]">
+        <p className="text-xs text-[#6B7280] mb-1">
+          Probability
+        </p>
+
+        <p className={`font-black text-lg ${config.color}`}>
+          {config.label === "Dream"
+            ? "25%"
+            : config.label === "Target"
+            ? "65%"
+            : "90%"}
+        </p>
+      </div>
+    </div>
+  </div>
+))}
                   </div>
                 </div>
               </motion.section>
@@ -305,15 +336,13 @@ export default function ReportViewPage() {
               </div>
             </div>
             <div className={`${card} p-8`}>
-              {report.weaknesses.length === 0 ? (
-                <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
+{report ? (                <div className="flex items-center gap-3 text-emerald-600 dark:text-emerald-400">
                   <CheckCircle2 className="h-5 w-5" />
                   <p className="font-semibold">No significant weaknesses detected. Your profile is well-balanced!</p>
                 </div>
               ) : (
                 <ul className="space-y-4">
-                  {report.weaknesses.map((w, i) => (
-                    <li key={i} className="rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.025] dark:bg-white/[0.025] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+{([] as any[]).map((w: any, i: number) => (                    <li key={i} className="rounded-2xl border border-black/5 dark:border-white/5 bg-black/[0.025] dark:bg-white/[0.025] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <ShieldAlert className={`h-5 w-5 shrink-0 ${
                           w.severity === "High" ? "text-red-500" : w.severity === "Medium" ? "text-amber-500" : "text-blue-400"
@@ -346,7 +375,10 @@ export default function ReportViewPage() {
             </div>
             <div className={`${card} p-8`}>
                <ul className="space-y-4">
-                  {(report.improvementSuggestions || []).map((suggestion, i) => (
+                  {(report.roadmap
+  ? report.roadmap.split(". ")
+  : []
+).map((suggestion: string, i: number) => (
                     <li key={i} className="flex items-start gap-3">
                       <div className="h-6 w-6 rounded-full bg-[#8B5CF6]/10 text-[#8B5CF6] flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold">
                         {i + 1}
@@ -370,7 +402,7 @@ export default function ReportViewPage() {
             </div>
             <div className={`${card} p-8 bg-gradient-to-br from-[#4F46E5]/5 to-transparent border-l-4 border-[#4F46E5]`}>
               <p className="text-base text-[#111827] dark:text-[#D1D5DB] leading-relaxed font-medium">
-                {report.finalRecommendation}
+                {report.airecommendations}
               </p>
             </div>
           </motion.section>

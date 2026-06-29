@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import api from "@/lib/api";
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import { 
   Play, 
@@ -44,9 +45,35 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false);
   const [dateRange, setDateRange] = useState("Last 30 Days");
 
+  const [analytics, setAnalytics] = useState<any>(null);
+
+const [tasks, setTasks] = useState<any[]>([]);
+
   useEffect(() => {
-    setMounted(true);
-  }, []);
+  setMounted(true);
+
+  loadDashboard();
+}, []);
+
+console.log("Dashboard page loaded");
+const loadDashboard = async () => {
+  console.log("loadDashboard called");
+  try {
+const [analyticsRes, taskRes] = await Promise.all([
+  api.get("/analytics/dashboard"),
+  api.get("/tasks/today"),
+]);
+
+console.log("ANALYTICS RESPONSE =>", analyticsRes.data);
+
+console.log("TASKS RESPONSE =>", taskRes.data);
+
+setAnalytics(analyticsRes.data);
+setTasks(taskRes.data);
+  } catch (error) {
+    console.error("Dashboard Error:", error);
+  }
+};
 
   if (!mounted) return null;
 
@@ -57,8 +84,9 @@ export default function DashboardPage() {
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mt-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Overview</h1>
-          <p className="text-sm text-gray-500 mt-1 font-medium">Welcome back, Kirti. Here's what's happening today.</p>
-        </div>
+<p className="text-sm text-gray-500 mt-1 font-medium">
+  Welcome back{analytics ? ", Student" : ""}. Here's what's happening today.
+</p>        </div>
         
         <div className="flex items-center gap-2">
           <div className="flex bg-gray-100/80 p-1 rounded-lg border border-gray-200/50">
@@ -94,7 +122,7 @@ export default function DashboardPage() {
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-gray-900">96.4</span>
+              <span className="text-3xl font-bold tracking-tight text-gray-900">{analytics?.profileScore ?? "--"}</span>
             </div>
             <div className="flex items-center gap-1 mt-2 text-xs font-medium text-emerald-600">
               <ArrowUpRight className="w-3 h-3" />
@@ -129,7 +157,7 @@ export default function DashboardPage() {
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-gray-900">99.0</span>
+              <span className="text-3xl font-bold tracking-tight text-gray-900">{analytics?.targetPercentile ?? "--"}</span>
             </div>
             <div className="flex items-center gap-1 mt-2 text-xs font-medium text-orange-600">
               <ArrowDownRight className="w-3 h-3" />
@@ -295,8 +323,8 @@ export default function DashboardPage() {
                   <FileWarning className="w-4 h-4 text-red-500" /> Weakness Detected
                 </h4>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  You are losing marks consistently in <span className="font-semibold text-gray-900">Time & Work</span> and <span className="font-semibold text-gray-900">Percentages</span>. Accuracy is below 40%.
-                </p>
+  {analytics?.gapAnalysis ?? "No gap analysis available."}
+</p>
               </div>
               <div className="h-px bg-gray-100 w-full" />
               <div className="space-y-2">
@@ -304,8 +332,8 @@ export default function DashboardPage() {
                   <Activity className="w-4 h-4 text-green-500" /> Opportunity
                 </h4>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  Improving these arithmetic topics can push your score past the 99th percentile cutoff for IIM ABC.
-                </p>
+  {analytics?.roadmap ?? "No roadmap available."}
+</p>
               </div>
             </div>
             <div className="p-4 bg-gray-50 border-t border-gray-100">
@@ -323,24 +351,36 @@ export default function DashboardPage() {
               <h3 className="text-base font-semibold text-gray-900">Priority Tasks</h3>
             </div>
             <div className="p-0">
-              {[
-                { label: "Review Error Log", desc: "24 unresolved mistakes", tag: "High", href: "/error-log" },
-                { label: "Take Sectional", desc: "VARC focus required", tag: "Medium", href: "/mocks" },
-                { label: "Resume Mock 03", desc: "Paused in DILR section", tag: "High", href: "/mocks/1/exam" },
-              ].map((task, i) => (
-                <Link key={i} href={task.href} className="flex items-start justify-between p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors group">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{task.label}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{task.desc}</p>
-                  </div>
-                  <span className={cn(
-                    "px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider",
-                    task.tag === "High" ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-600"
-                  )}>
-                    {task.tag}
-                  </span>
-                </Link>
-              ))}
+             {tasks.map((task: any) => (
+  <Link
+    key={task.id}
+    href="/tasks"
+    className="flex items-start justify-between p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors group"
+  >
+    <div>
+      <p className="text-sm font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+        {task.title}
+      </p>
+
+      <p className="text-xs text-gray-500 mt-0.5">
+        {task.description}
+      </p>
+    </div>
+
+    <span
+      className={cn(
+        "px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider",
+        task.priority === "high"
+          ? "bg-red-50 text-red-600"
+          : task.priority === "medium"
+          ? "bg-yellow-50 text-yellow-600"
+          : "bg-green-50 text-green-600"
+      )}
+    >
+      {task.priority}
+    </span>
+  </Link>
+))}
             </div>
           </div>
 

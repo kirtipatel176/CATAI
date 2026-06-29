@@ -1,13 +1,69 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+
 import { motion } from "framer-motion";
 import { Mail, Lock, ArrowRight } from "lucide-react";
+
+import api from "@/lib/api";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
+
+  const router = useRouter();
+
+const [email, setEmail] = useState("");
+
+const [password, setPassword] =
+  useState("");
+
+const [loading, setLoading] =
+  useState(false);
+
+  const handleLogin = async () => {
+  try {
+    setLoading(true);
+
+    const res = await api.post("/auth/login", {
+      email,
+      password,
+    });
+
+    console.log("LOGIN RESPONSE =>", res.data);
+
+    localStorage.setItem(
+      "token",
+      res.data.accessToken,
+    );
+
+    console.log(
+      "TOKEN SAVED =>",
+      localStorage.getItem("token"),
+    );
+
+    localStorage.setItem(
+      "user",
+      JSON.stringify(res.data.user),
+    );
+
+    router.push("/dashboard");
+  } catch (error: any) {
+    console.log("LOGIN ERROR =>", error.response);
+
+    alert(
+      error.response?.data?.message ??
+      "Login Failed",
+    );
+  } finally {
+    setLoading(false);
+  }
+};
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -29,7 +85,11 @@ export default function LoginPage() {
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
               <Input
-                id="email"
+  id="email"
+  value={email}
+  onChange={(e) =>
+    setEmail(e.target.value)
+  }
                 type="email"
                 placeholder="m@example.com"
                 required
@@ -50,7 +110,11 @@ export default function LoginPage() {
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
               <Input
-                id="password"
+  id="password"
+  value={password}
+  onChange={(e) =>
+    setPassword(e.target.value)
+  }
                 type="password"
                 placeholder="••••••••"
                 required
@@ -59,11 +123,18 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <Link href="/dashboard" className="w-full mt-2">
-            <Button type="button" className="w-full h-14 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-lg shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 group">
-              Sign In <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-            </Button>
-          </Link>
+          <Button
+  type="button"
+  disabled={loading}
+  onClick={handleLogin}
+  className="w-full h-14 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-lg shadow-lg shadow-indigo-200"
+>
+  {loading
+    ? "Signing In..."
+    : "Sign In"}
+
+  <ArrowRight className="h-5 w-5" />
+</Button>
         </form>
 
         <div className="relative my-4">

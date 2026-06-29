@@ -9,7 +9,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { ProfileEngine, UserProfileInput, ProfileReport, EducationStage } from "@/lib/profile-engine";
+import api from "@/lib/api";
+import {
+  UserProfileInput,
+  ProfileReport,
+  EducationStage,
+} from "@/lib/profile-engine";
 import { cn } from "@/lib/utils";
 
 // Default Profile Input
@@ -132,30 +137,63 @@ export default function ProfileIntelligencePage() {
   
   const [history, setHistory] = useState<StoredReport[]>([]);
   
-  useEffect(() => {
-    setMounted(true);
-    // Load from local storage
-    const loaded: StoredReport[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith("profile_report_")) {
-        const data = localStorage.getItem(key);
-        if (data) {
-          try {
-            const report = JSON.parse(data);
-            const idParts = key.split("rep_");
-            const timestamp = idParts.length > 1 ? parseInt(idParts[1]) : 0;
-            loaded.push({ id: key.replace("profile_report_", ""), timestamp, report });
-          } catch(e) {}
-        }
-      }
-    }
-    loaded.sort((a, b) => b.timestamp - a.timestamp);
-    setHistory(loaded);
-  }, []);
+useEffect(() => {
+  setMounted(true);
+
+  loadLatestReport();
+}, []);
 
   const latestReport = history.length > 0 ? history[0].report : null;
   const latestId = history.length > 0 ? history[0].id : null;
+
+  const loadLatestReport = async () => {
+  try {
+    const res = await api.get("/profile-evaluator/latest");
+
+    console.log("LATEST REPORT =>", res.data);
+
+    if (!res.data) return;
+
+    setHistory([
+      {
+        id: res.data.id,
+        timestamp: new Date(res.data.createdat).getTime(),
+report: {
+  ...res.data,
+
+  overallScore: res.data.overallscore,
+
+  profileCategory:
+    res.data.overallscore >= 90
+      ? "Excellent"
+      : res.data.overallscore >= 75
+      ? "Strong"
+      : res.data.overallscore >= 60
+      ? "Average"
+      : "Needs Improvement",
+
+  readiness: res.data.examreadiness,
+
+  strengths: [],
+
+  weaknesses: [],
+
+  recommendations: [],
+
+  dreamColleges:
+    res.data.collegesuitability?.dream ?? [],
+
+  targetColleges:
+    res.data.collegesuitability?.target ?? [],
+
+  safeColleges:
+    res.data.collegesuitability?.safe ?? [],
+},      },
+    ]);
+  } catch (err) {
+    console.log("No latest report found");
+  }
+};
 
   // Filter fields based on the selected education stage
   const currentStage = profile.educationStage as EducationStage | undefined;
@@ -210,6 +248,8 @@ export default function ProfileIntelligencePage() {
       setDirection(1);
       setCurrentStepIndex(prev => Math.min(prev + 1, dynamicSteps.length - 1));
     } else {
+
+  
       submitForm();
     }
   };
@@ -263,33 +303,125 @@ export default function ProfileIntelligencePage() {
     }
   };
 
-  const submitForm = () => {
-    const reportId = `rep_${Date.now()}`;
-    // Assign default 0s to fields that weren't rendered because of stage filtering (so the engine doesn't break)
-    const finalProfile: UserProfileInput = {
-        educationStage: profile.educationStage as EducationStage,
-        reservationCategory: profile.reservationCategory as string,
-        targetExam: profile.targetExam as string,
-        attemptYear: profile.attemptYear as string,
-        targetMBAColleges: profile.targetMBAColleges as string[],
-        percent10th: profile.percent10th || 0,
-        percent12th: profile.percent12th || 0,
-        graduationCGPA: profile.graduationCGPA || 0,
-        graduationStream: profile.graduationStream || "N/A",
-        mockPercentile: profile.mockPercentile,
-        internshipCount: profile.internshipCount,
-        workExperience: profile.workExperience,
-        leadershipExperience: profile.leadershipExperience,
-        gender: profile.gender
-    };
-    
-    const engine = new ProfileEngine(finalProfile);
-    const report = engine.generateReport();
-    localStorage.setItem(`profile_report_${reportId}`, JSON.stringify(report));
-    setIsWizardOpen(false);
-    toast.success("Intelligence Engine analyzing profile...");
-    router.push(`/profile-evaluator/report/${reportId}`);
-  };
+  const submitForm = async () => {
+  try {
+    const profileData = {
+  // Basic Details
+  educationstage: profile.educationStage,
+
+  reservationcategory: profile.reservationCategory,
+
+  gender: profile.gender,
+
+  // Academics
+  tenthpercentage: profile.percent10th || 0,
+
+  twelfthpercentage: profile.percent12th || 0,
+
+  graduationscore: profile.graduationCGPA || 0,
+
+  graduationstream: profile.graduationStream || "",
+
+  // Experience
+  isexperienced:
+    profile.workExperience &&
+    profile.workExperience !== "0 Months",
+
+  experiencemonths: (() => {
+    switch (profile.workExperience) {
+      case "1-6 Months":
+        return 6;
+
+      case "6-12 Months":
+        return 12;
+
+      case "12-24 Months":
+        return 24;
+
+      case "24-36 Months":
+        return 36;
+
+      case "36+ Months":
+        return 48;
+
+      default:
+        return 0;
+    }
+  })(),
+
+  internshipcount: (() => {
+    switch (profile.internshipCount) {
+      case "1":
+        return 1;
+
+      case "2":
+        return 2;
+
+      case "3+":
+        return 3;
+
+      default:
+        return 0;
+    }
+  })(),
+
+  leadershipexperience:
+    profile.leadershipExperience === "Yes",
+
+  currentrole:
+    profile.educationStage,
+
+  // Extra Profile
+  certifications: "",
+
+  leadershipactivities:
+    profile.leadershipExperience === "Yes"
+      ? "Yes"
+      : "No",
+
+  competitions: "",
+
+  // MBA Goals
+  targetexam:
+    profile.targetExam,
+
+  attemptyear:
+    profile.attemptYear
+      ? Number(profile.attemptYear)
+      : undefined,
+
+  targetpercentile:
+    profile.mockPercentile || 90,
+
+  targetcolleges:
+    Array.isArray(profile.targetMBAColleges)
+      ? profile.targetMBAColleges.join(", ")
+      : "",
+
+  // Study
+  weakareas: "",
+
+  dailystudyhours: 2,
+};
+
+    // Step 1: Save Student Profile
+    await api.post("/student-profile", profileData);
+
+    // Step 2: Generate Report
+const reportRes = await api.post("/profile-evaluator/generate");
+
+console.log(reportRes.data);
+    toast.success("Profile evaluated successfully.");
+
+    // Step 3: Navigate to Report
+    router.push(
+      `/profile-evaluator/report/${reportRes.data.id}`
+    );
+  } catch (error) {
+    console.error(error);
+    toast.error("Failed to generate report.");
+  }
+};
 
   // Fluid UI animations
   const variants: any = {
