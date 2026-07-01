@@ -21,4 +21,22 @@ api.interceptors.request.use((config) => {
 
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    console.error("========== API ERROR ==========");
+    console.error("URL:", error.config?.url);
+    console.error("METHOD:", error.config?.method);
+    console.error("STATUS:", error.response?.status);
+    console.error("DATA:", error.response?.data);
+    console.error("FULL ERROR:", error);
+    console.error("===============================");
+
+    return Promise.reject(error);
+  }
+);
+
 export default api;

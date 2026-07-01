@@ -18,7 +18,7 @@ import {
   ChevronRight, BrainCircuit
 } from "lucide-react";
 import { toast } from "sonner";
-
+import api from "@/lib/api";
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
@@ -35,14 +35,12 @@ const itemVariants: Variants = {
 const glassCardClass = "bg-white/80 dark:bg-black/40 backdrop-blur-3xl border border-white/60 dark:border-white/10 rounded-[24px] shadow-[0_20px_60px_rgba(15,23,42,0.08)] overflow-hidden transition-all duration-500 hover:shadow-[0_30px_80px_rgba(15,23,42,0.12)] hover:border-white/80 dark:hover:border-white/20";
 const glassInputClass = "bg-black/5 dark:bg-white/5 rounded-xl h-12 text-[#111827] dark:text-white border-transparent focus:border-[#7F77DD] focus:ring-[#7F77DD] placeholder:text-[#6B7280]";
 
-const mockHistory = [
-  { id: "v4", name: "Roadmap V4", date: "July 2026", status: "Active", completion: "72%" },
-  { id: "v3", name: "Roadmap V3", date: "June 2026", status: "Archived", completion: "100%" },
-  { id: "v2", name: "Roadmap V2", date: "May 2026", status: "Archived", completion: "100%" },
-];
+const mockHistory: any[] = [];
 
 export default function PreparationRoadmapPage() {
   const router = useRouter();
+  const [studyPlan, setStudyPlan] = useState<any>(null);
+  const [loadingPlan, setLoadingPlan] = useState(true);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
   const [progress, setProgress] = useState(72);
@@ -65,7 +63,50 @@ export default function PreparationRoadmapPage() {
     weakTopics: [] as string[]
   });
   const [isProcessing, setIsProcessing] = useState(false);
-  const [localHistory, setLocalHistory] = useState(mockHistory);
+  const generateStudyPlan = async () => {
+  try {
+    console.log("1. Start");
+
+    setIsProcessing(true);
+
+    console.log("2. Calling API");
+
+    const res = await api.post("/study-plan/generate");
+
+    console.log("3. API Success", res.data);
+
+    setStudyPlan(res.data);
+
+    setLocalHistory((prev) => [
+  {
+    id: res.data.id,
+    name: `Roadmap ${prev.length + 1}`,
+    date: new Date(res.data.createdat).toLocaleDateString(),
+    status: "Active",
+    completion: "0%",
+  },
+  ...prev.map((item) => ({ ...item, status: "Archived" })),
+]);
+
+    console.log("4. Study plan updated");
+
+    toast.success("Study Plan Generated Successfully");
+
+    console.log("5. Toast shown");
+
+    setIsWizardOpen(false);
+
+    console.log("6. Wizard closed");
+
+  } catch (err) {
+    console.error("ERROR:", err);
+    toast.error("Failed to generate Study Plan");
+  } finally {
+    console.log("7. Finally");
+    setIsProcessing(false);
+  }
+};
+  const [localHistory, setLocalHistory] = useState<any[]>([]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -79,18 +120,75 @@ export default function PreparationRoadmapPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+  const loadStudyPlan = async () => {
+    try {
+        const [latestRes, historyRes] = await Promise.all([
+  api.get("/study-plan/latest"),
+  api.get("/study-plan/history"),
+]);
+
+setStudyPlan(latestRes.data);
+
+setLocalHistory(
+  historyRes.data.map((item: any, index: number) => ({
+    id: item.id,
+    name: `Roadmap ${historyRes.data.length - index}`,
+    date: new Date(item.createdat).toLocaleDateString(),
+    status: index === 0 ? "Active" : "Archived",
+    completion: index === 0 ? "0%" : "Completed",
+  }))
+);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingPlan(false);
+    }
+  };
+
+  loadStudyPlan();
+}, []);
+
+useEffect(() => {
+  console.log("Wizard Step:", wizardStep);
+}, [wizardStep]);
+
   type TaskStatus = 'Pending' | 'In Progress' | 'Completed' | 'Skipped';
   type TaskPriority = 'High Priority' | 'Secondary';
-  
-  const [priorityTasks, setPriorityTasks] = useState([
-    { id: 1, title: 'Arithmetic Practice', category: 'Quantitative Ability', duration: '45 Minutes', status: 'Pending' as TaskStatus, priority: 'High Priority' as TaskPriority, color: '#2563EB' },
-    { id: 2, title: 'Logical Reasoning Arrangement Set', category: 'Data Interpretation & Logical Reasoning', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'High Priority' as TaskPriority, color: '#F59E0B' },
-  ]);
+  const [priorityTasks, setPriorityTasks] = useState<any[]>([]);
+const [secondaryTasks, setSecondaryTasks] = useState<any[]>([]);
 
-  const [secondaryTasks, setSecondaryTasks] = useState([
-    { id: 3, title: 'Reading Comprehension', category: 'Verbal Ability & Reading Comprehension', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'Secondary' as TaskPriority, color: '#1D9E75' },
-    { id: 4, title: 'Mock Test Analysis', category: 'Strategy', duration: '30 Minutes', status: 'Pending' as TaskStatus, priority: 'Secondary' as TaskPriority, color: '#A855F7' },
-  ]);
+useEffect(() => {
+  if (!studyPlan?.dailytasks) return;
+
+  const tasks = studyPlan.dailytasks
+    .split("\n")
+    .filter((t: string) => t.trim())
+    .map((task: string, index: number) => ({
+      id: index + 1,
+      title: task,
+      category: "AI Recommendation",
+      duration: "30 Minutes",
+      status: "Pending",
+      priority: index < 2 ? "High Priority" : "Secondary",
+      color:
+        index % 4 === 0
+          ? "#2563EB"
+          : index % 4 === 1
+          ? "#F59E0B"
+          : index % 4 === 2
+          ? "#10B981"
+          : "#A855F7",
+    }));
+
+  setPriorityTasks(
+  tasks.filter((t: any) => t.priority === "High Priority")
+);
+
+setSecondaryTasks(
+  tasks.filter((t: any) => t.priority === "Secondary")
+);
+}, [studyPlan]);
 
   const handleTaskAction = (taskId: number, action: 'start' | 'complete' | 'skip', isPriority: boolean) => {
     const updateTasks = (tasks: any[]) => tasks.map(t => {
@@ -176,7 +274,15 @@ export default function PreparationRoadmapPage() {
     </div>
   );
 
+  if (loadingPlan) {
   return (
+    <div className="flex justify-center items-center h-screen">
+      Loading Study Plan...
+    </div>
+  );
+}
+
+return (
     <div className="relative min-h-screen w-full pb-32 bg-[#F6F8FC] dark:bg-[#0A0A0A] selection:bg-[#4F46E5]/30">
       {/* AMBIENT BACKGROUND */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
@@ -197,12 +303,17 @@ export default function PreparationRoadmapPage() {
           >
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-[#6B7280]">Target</span>
-              <span className="text-sm font-extrabold text-[#111827] dark:text-white">CAT 2027</span>
+              <span className="text-sm font-extrabold text-[#111827] dark:text-white">{studyPlan?.targetexam}{" "}
+{studyPlan?.examdate
+  ? new Date(studyPlan.examdate).getFullYear()
+  : ""}</span>
             </div>
             <div className="w-px h-4 bg-black/10 dark:bg-white/10"></div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-[#6B7280]">Goal</span>
-              <span className="text-sm font-extrabold text-[#111827] dark:text-white">99+</span>
+              <span className="text-sm font-extrabold text-[#111827] dark:text-white">
+  {studyPlan?.targetpercentile}+
+</span>
             </div>
             <div className="w-px h-4 bg-black/10 dark:bg-white/10"></div>
             <div className="flex items-center gap-2">
@@ -235,23 +346,42 @@ export default function PreparationRoadmapPage() {
             <div className="text-white space-y-6 flex-1 w-full">
               <div className="flex flex-wrap items-center gap-4">
                 <div className="bg-white/20 backdrop-blur-md border border-white/30 px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full shadow-sm">Active Roadmap</div>
-                <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">CAT 2027</h1>
+                <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">
+  {studyPlan?.targetexam}{" "}
+  {studyPlan?.examdate
+    ? new Date(studyPlan.examdate).getFullYear()
+    : ""}
+</h1>
               </div>
               
               <div className="flex flex-wrap items-center gap-8 md:gap-12">
                 <div className="flex flex-col gap-1">
                   <span className="text-white/70 text-[10px] uppercase tracking-widest font-bold">Target Percentile</span>
-                  <span className="text-3xl font-black">99+</span>
+                  <span className="text-3xl font-black">
+  {studyPlan?.targetpercentile}+
+</span>
                 </div>
                 <div className="w-px h-10 bg-white/20 hidden md:block"></div>
                 <div className="flex flex-col gap-1">
                   <span className="text-white/70 text-[10px] uppercase tracking-widest font-bold">Target Colleges</span>
-                  <span className="text-sm font-bold max-w-[160px] leading-snug">IIM Ahmedabad, IIM Bangalore, SPJIMR</span>
+                  <span className="text-sm font-bold max-w-[160px] leading-snug">
+  {studyPlan?.roadmap?.split("\n")[0] || "No Roadmap Available"}
+</span>
                 </div>
                 <div className="w-px h-10 bg-white/20 hidden md:block"></div>
                 <div className="flex flex-col gap-1">
                   <span className="text-white/70 text-[10px] uppercase tracking-widest font-bold">Days Remaining</span>
-                  <span className="text-3xl font-black text-[#A78BFA]">248</span>
+                  <span className="text-3xl font-black text-[#A78BFA]">
+  {studyPlan?.examdate
+    ? Math.max(
+        0,
+        Math.ceil(
+          (new Date(studyPlan.examdate).getTime() - Date.now()) /
+            (1000 * 60 * 60 * 24)
+        )
+      )
+    : 0}
+</span>
                 </div>
               </div>
 
@@ -274,7 +404,9 @@ export default function PreparationRoadmapPage() {
                 <div className="flex flex-col">
                   <span className="text-white/70 text-[10px] uppercase tracking-widest font-bold mb-1">Roadmap Health</span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-black text-[#10B981]">87</span>
+                    <span className="text-3xl font-black text-[#10B981]">
+  {studyPlan?.targetpercentile || 0}
+</span>
                     <span className="text-sm font-bold text-white/50">/ 100</span>
                   </div>
                 </div>
@@ -292,15 +424,17 @@ export default function PreparationRoadmapPage() {
               <div className="space-y-3 pt-4 border-t border-white/10">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-white/80">Task Completion</span>
-                  <span className="text-xs font-black text-white">92%</span>
+                  <span className="text-xs font-black text-white"><span className="text-xs font-black text-white">
+  {progress.toFixed(0)}%
+</span></span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-white/80">Consistency</span>
-                  <span className="text-xs font-black text-white">84%</span>
+                  <span className="text-xs font-black text-white">{progress >= 84 ? progress.toFixed(0) : 84}%</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-white/80">Mock Participation</span>
-                  <span className="text-xs font-black text-white">88%</span>
+                  <span className="text-xs font-black text-white">{progress >= 88 ? progress.toFixed(0) : 88}%</span>
                 </div>
               </div>
             </div>
@@ -348,18 +482,24 @@ export default function PreparationRoadmapPage() {
             {/* Active Phase Details */}
             <div className="bg-gradient-to-r from-[#2563EB]/5 to-[#7C3AED]/5 border border-[#2563EB]/10 rounded-2xl p-6 mt-4 max-w-[1000px] mx-auto w-full flex flex-col md:flex-row items-center gap-6 md:gap-10">
               <div className="flex-1 space-y-2 text-center md:text-left">
-                <h3 className="text-xl font-bold text-[#111827] dark:text-white">Phase 1: Foundation Building</h3>
-                <p className="text-sm font-medium text-[#6B7280] max-w-xl">Master arithmetic, algebra basics, and core reading comprehension skills before moving to advanced concepts.</p>
+                <h3 className="text-xl font-bold text-[#111827] dark:text-white">
+  {studyPlan?.roadmap?.split("\n")[0] || "Study Roadmap"}
+</h3>
+                <p className="text-sm font-medium text-[#6B7280] max-w-xl whitespace-pre-wrap">
+  {studyPlan?.roadmap || "No roadmap available."}
+</p>
               </div>
               <div className="flex items-center gap-8 shrink-0">
                 <div className="flex flex-col text-center md:text-right">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">Completion</span>
-                  <span className="text-2xl font-black text-[#2563EB]">45%</span>
+                  <span className="text-2xl font-black text-[#2563EB]">{progress.toFixed(0)}%</span>
                 </div>
                 <div className="w-px h-10 bg-black/10 dark:bg-white/10 hidden md:block"></div>
                 <div className="flex flex-col text-center md:text-right">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">Estimated Completion Date</span>
-                  <span className="text-lg font-bold text-[#111827] dark:text-white">Aug 15, 2026</span>
+                  <span className="text-lg font-bold text-[#111827] dark:text-white">{studyPlan?.examdate
+  ? new Date(studyPlan.examdate).toLocaleDateString()
+  : "Not Available"}</span>
                 </div>
               </div>
             </div>
@@ -389,19 +529,29 @@ export default function PreparationRoadmapPage() {
                   <div className="flex items-center gap-6">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">Total Tasks</span>
-                      <span className="text-xl font-black text-[#111827] dark:text-white">4</span>
+                      <span className="text-xl font-black text-[#111827] dark:text-white">
+  {studyPlan?.dailytasks
+    ? studyPlan.dailytasks
+        .split("\n")
+        .filter((t: string) => t.trim()).length
+    : 0}
+</span>
                     </div>
                     <div className="w-px h-8 bg-black/10 dark:bg-white/10"></div>
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mb-1">Total Time</span>
-                      <span className="text-xl font-black text-[#111827] dark:text-white">2h 15m</span>
+                      <span className="text-xl font-black text-[#111827] dark:text-white">
+  {wizardData.dailyHours ?? 3}h
+</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 bg-[#10B981]/10 px-4 py-2 rounded-xl border border-[#10B981]/20">
                     <TrendingUp className="w-4 h-4 text-[#10B981]" />
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#10B981]">Expected Gain</span>
-                      <span className="text-sm font-black text-[#10B981]">+1.2% Progress</span>
+                      <span className="text-sm font-black text-[#10B981]">{progress < 100
+  ? `+${Math.max(1, Math.round((100 - progress) / 20))}% Progress`
+  : "Goal Achieved"}</span>
                     </div>
                   </div>
                 </div>
@@ -413,7 +563,7 @@ export default function PreparationRoadmapPage() {
                       <Zap className="w-3.5 h-3.5 text-[#E11D48]" /> Priority Tasks
                     </h3>
                     <div className="grid gap-3">
-                      {priorityTasks.map(task => renderTask(task, true))}
+                      {priorityTasks.map((task : any) => renderTask(task, true))}
                     </div>
                   </div>
 
@@ -423,13 +573,56 @@ export default function PreparationRoadmapPage() {
                       <ListTodo className="w-3.5 h-3.5" /> Secondary Tasks
                     </h3>
                     <div className="grid gap-3">
-                      {secondaryTasks.map(task => renderTask(task, false))}
+                      {secondaryTasks.map((task : any)=> renderTask(task, false))}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
+
+<div className={glassCardClass + " p-6"}>
+  <h2 className="text-xl font-bold mb-4">
+    AI Generated Study Plan
+  </h2>
+
+  <div className="space-y-6">
+
+    <div>
+      <h3 className="font-semibold">Roadmap</h3>
+      <p>{studyPlan?.roadmap}</p>
+    </div>
+
+    <div>
+      <h3 className="font-semibold">Monthly Plan</h3>
+      <pre className="whitespace-pre-wrap">
+        {studyPlan?.monthlyplan}
+      </pre>
+    </div>
+
+    <div>
+      <h3 className="font-semibold">Weekly Plan</h3>
+      <pre className="whitespace-pre-wrap">
+        {studyPlan?.weeklyplan}
+      </pre>
+    </div>
+
+    <div>
+      <h3 className="font-semibold">Daily Tasks</h3>
+      <pre className="whitespace-pre-wrap">
+        {studyPlan?.dailytasks}
+      </pre>
+    </div>
+
+    <div>
+      <h3 className="font-semibold">Revision Plan</h3>
+      <pre className="whitespace-pre-wrap">
+        {studyPlan?.revisionplan}
+      </pre>
+    </div>
+
+  </div>
+</div>
             {/* SECTION 6: ROADMAP BREAKDOWN */}
             <div id="roadmap-breakdown" className="space-y-4 pt-2">
               <div className="flex items-center gap-2 pl-2">
@@ -622,15 +815,20 @@ export default function PreparationRoadmapPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-black/5 dark:bg-white/5 p-4 rounded-2xl">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] block mb-1">Target Exam</span>
-                      <span className="text-sm font-bold text-[#111827] dark:text-white">CAT 2027</span>
+                      <span className="text-sm font-bold text-[#111827] dark:text-white">{studyPlan?.targetexam}{" "}
+{studyPlan?.examdate
+  ? new Date(studyPlan.examdate).getFullYear()
+  : ""}</span>
                     </div>
                     <div className="bg-black/5 dark:bg-white/5 p-4 rounded-2xl">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] block mb-1">Target Percentile</span>
-                      <span className="text-sm font-bold text-[#111827] dark:text-white">99+</span>
+                      <span className="text-sm font-bold text-[#111827] dark:text-white">
+  {studyPlan?.targetpercentile}+
+</span>
                     </div>
                     <div className="bg-black/5 dark:bg-white/5 p-4 rounded-2xl col-span-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] block mb-1">Target Colleges</span>
-                      <span className="text-sm font-bold text-[#111827] dark:text-white">IIM Ahmedabad, IIM Bangalore, SPJIMR</span>
+                      <span className="text-sm font-bold text-[#111827] dark:text-white">{studyPlan?.roadmap?.split("\n")[0] ?? "No Roadmap"}</span>
                     </div>
                   </div>
 
@@ -644,20 +842,35 @@ export default function PreparationRoadmapPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-[#6B7280] pl-1 border-l-2 border-[#7C3AED]">Roadmap Phases</h3>
-                    <div className="space-y-3 border-l-2 border-black/5 dark:border-white/5 ml-1 pl-4 py-1">
-                      <div className="relative">
-                        <div className="absolute w-2 h-2 rounded-full bg-[#2563EB] -left-[21px] top-1.5 ring-4 ring-white dark:ring-[#0A0A0A]"></div>
-                        <h4 className="text-sm font-bold text-[#111827] dark:text-white">Foundation</h4>
-                        <p className="text-xs font-medium text-[#6B7280]">Jun - Aug 2026</p>
-                      </div>
-                      <div className="relative">
-                        <div className="absolute w-2 h-2 rounded-full bg-[#6B7280] -left-[21px] top-1.5 ring-4 ring-white dark:ring-[#0A0A0A]"></div>
-                        <h4 className="text-sm font-bold text-[#111827] dark:text-white">Concept Building</h4>
-                        <p className="text-xs font-medium text-[#6B7280]">Aug - Oct 2026</p>
-                      </div>
-                    </div>
-                  </div>
+  <h3 className="text-xs font-bold uppercase tracking-wider text-[#6B7280] pl-1 border-l-2 border-[#7C3AED]">
+    Roadmap Phases
+  </h3>
+
+  <div className="space-y-3 border-l-2 border-black/5 dark:border-white/5 ml-1 pl-4 py-1">
+    {(
+  studyPlan?.roadmap
+    ?.split("\n")
+    .filter((line: string) => line.trim())
+    .slice(0, 5) ?? ["Generate your first AI roadmap"]
+).map((phase: string, index: number) => (
+  <div key={index} className="relative">
+    <div
+      className={`absolute w-2 h-2 rounded-full -left-[21px] top-1.5 ring-4 ring-white dark:ring-[#0A0A0A] ${
+        index === 0 ? "bg-[#2563EB]" : "bg-[#6B7280]"
+      }`}
+    ></div>
+
+    <h4 className="text-sm font-bold text-[#111827] dark:text-white">
+      Phase {index + 1}
+    </h4>
+
+    <p className="text-xs font-medium text-[#6B7280]">
+      {phase}
+    </p>
+  </div>
+))}
+  </div>
+</div>
 
                   <div className="bg-[#2563EB]/5 border border-[#2563EB]/10 rounded-2xl p-4">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-[#2563EB] mb-2 flex items-center gap-1.5"><Bot className="w-3.5 h-3.5" /> AI Recommendations</h3>
@@ -993,29 +1206,14 @@ export default function PreparationRoadmapPage() {
                   </Button>
                 )}
                 {wizardStep < 6 ? (
-                  <Button onClick={() => setWizardStep(wizardStep + 1)} className="flex-1 rounded-2xl h-14 font-bold text-lg bg-[#2563EB] hover:bg-[#2563EB]/90 text-white shadow-xl shadow-[#2563EB]/20">
-                    Continue <ArrowRight className="ml-2 w-5 h-5" />
-                  </Button>
-                ) : (
-                  <Button onClick={() => {
-                    setIsProcessing(true);
-                    setTimeout(() => {
-                      setIsProcessing(false);
-                      setIsWizardOpen(false);
-                      setWizardStep(1);
-                      // Setup new history
-                      const newRoadmap = {
-                        id: `v${localHistory.length + 2}`,
-                        name: `Roadmap V${localHistory.length + 2}`,
-                        date: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
-                        status: 'Active',
-                        completion: '0%'
-                      };
-                      setLocalHistory([newRoadmap, ...localHistory.map(h => ({...h, status: 'Archived'}))]);
-                      setProgress(0);
-                      toast.success('New Roadmap Generated Successfully!');
-                    }, 3000);
-                  }} className="flex-1 rounded-2xl h-14 font-bold text-lg bg-gradient-to-r from-[#2563EB] to-[#7C3AED] hover:opacity-90 text-white shadow-xl shadow-[#7C3AED]/30">
+  <Button
+    onClick={() => setWizardStep((prev) => prev + 1)}
+    className="flex-1 rounded-2xl h-14 font-bold text-lg bg-[#2563EB] hover:bg-[#2563EB]/90 text-white shadow-xl shadow-[#2563EB]/20"
+  >
+    Continue <ArrowRight className="ml-2 w-5 h-5" />
+  </Button>
+) : (
+                  <Button onClick={generateStudyPlan} className="flex-1 rounded-2xl h-14 font-bold text-lg bg-gradient-to-r from-[#2563EB] to-[#7C3AED] hover:opacity-90 text-white shadow-xl shadow-[#7C3AED]/30">
                     Generate Roadmap
                   </Button>
                 )}

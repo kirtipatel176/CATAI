@@ -23,31 +23,26 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const PERFORMANCE_DATA = [
-  { date: "May 1", percentile: 85, score: 62 },
-  { date: "May 8", percentile: 89, score: 70 },
-  { date: "May 15", percentile: 88, score: 68 },
-  { date: "May 22", percentile: 92, score: 78 },
-  { date: "May 29", percentile: 94, score: 82 },
-  { date: "Jun 5", percentile: 93, score: 79 },
-  { date: "Jun 12", percentile: 96.4, score: 90 },
-];
 
-const RECENT_ACTIVITY = [
-  { id: 1, name: "CAT Full Mock 03", type: "Full Mock", status: "Completed", score: "96.4 %ile", date: "Today", icon: Play, iconColor: "text-blue-500", bg: "bg-blue-50" },
-  { id: 2, name: "Algebra Mastery", type: "Topic Test", status: "Completed", score: "88% Acc", date: "Yesterday", icon: Target, iconColor: "text-purple-500", bg: "bg-purple-50" },
-  { id: 3, name: "Reading Comp 04", type: "Sectional", status: "Paused", score: "--", date: "Jun 10", icon: Clock, iconColor: "text-orange-500", bg: "bg-orange-50" },
-  { id: 4, name: "Number System", type: "Topic Test", status: "Completed", score: "62% Acc", date: "Jun 08", icon: Brain, iconColor: "text-gray-500", bg: "bg-gray-100" },
-];
+
+
 
 export default function DashboardPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [dateRange, setDateRange] = useState("Last 30 Days");
 
-  const [analytics, setAnalytics] = useState<any>(null);
+const [analytics, setAnalytics] = useState<any>(null);
 
 const [tasks, setTasks] = useState<any[]>([]);
+
+const [performanceData, setPerformanceData] = useState<any[]>([]);
+
+const [recentActivity, setRecentActivity] = useState<any[]>([]); 
+
+const [latestMock, setLatestMock] = useState<any>(null);
+
+const [totalPractice, setTotalPractice] = useState(0);
 
   useEffect(() => {
   setMounted(true);
@@ -59,9 +54,10 @@ console.log("Dashboard page loaded");
 const loadDashboard = async () => {
   console.log("loadDashboard called");
   try {
-const [analyticsRes, taskRes] = await Promise.all([
+const [analyticsRes, taskRes, mockRes] = await Promise.all([
   api.get("/analytics/dashboard"),
   api.get("/tasks/today"),
+  api.get("/mock-test/history"),
 ]);
 
 console.log("ANALYTICS RESPONSE =>", analyticsRes.data);
@@ -70,6 +66,44 @@ console.log("TASKS RESPONSE =>", taskRes.data);
 
 setAnalytics(analyticsRes.data);
 setTasks(taskRes.data);
+
+const graphData = mockRes.data
+  .slice()
+  .reverse()
+  .map((mock: any) => ({
+    date: new Date(mock.createdAt).toLocaleDateString("en-IN", {
+      month: "short",
+      day: "numeric",
+    }),
+    percentile: mock.overallPercentile,
+    score: mock.overallScore,
+  }));
+
+setPerformanceData(graphData);
+
+const activity = mockRes.data
+  .slice()
+  .reverse()
+  .map((mock: any) => ({
+    id: mock.id,
+    name: mock.testName,
+    type: mock.exam,
+    status: "Completed",
+    score: `${mock.overallPercentile}%ile`,
+    date: new Date(mock.createdAt).toLocaleDateString("en-IN"),
+  }));
+
+setRecentActivity(activity);
+if (mockRes.data.length > 0) {
+  setLatestMock(mockRes.data[0]);
+  setTotalPractice(
+  mockRes.data.reduce(
+    (sum: number, mock: any) =>
+      sum + (mock.attemptedQuestions ?? 0),
+    0
+  )
+);
+}
   } catch (error) {
     console.error("Dashboard Error:", error);
   }
@@ -122,7 +156,7 @@ setTasks(taskRes.data);
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-gray-900">{analytics?.profileScore ?? "--"}</span>
+              <span className="text-3xl font-bold tracking-tight text-gray-900">{latestMock?.overallPercentile ?? "--"}</span>
             </div>
             <div className="flex items-center gap-1 mt-2 text-xs font-medium text-emerald-600">
               <ArrowUpRight className="w-3 h-3" />
@@ -139,8 +173,8 @@ setTasks(taskRes.data);
           </div>
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-gray-900">88</span>
-              <span className="text-sm text-gray-400 font-medium">/ 198</span>
+              <span className="text-3xl font-bold tracking-tight text-gray-900">{latestMock?.overallScore ?? "--"}</span>
+              <span className="text-sm text-gray-400 font-medium">/198</span>
             </div>
             <div className="flex items-center gap-1 mt-2 text-xs font-medium text-emerald-600">
               <ArrowUpRight className="w-3 h-3" />
@@ -161,7 +195,12 @@ setTasks(taskRes.data);
             </div>
             <div className="flex items-center gap-1 mt-2 text-xs font-medium text-orange-600">
               <ArrowDownRight className="w-3 h-3" />
-              <span>2.6 pts gap</span>
+              <span>{latestMock
+  ? `${(
+      analytics.targetPercentile -
+      latestMock.overallPercentile
+    ).toFixed(1)} pts gap`
+  : "--"}</span>
             </div>
           </div>
         </div>
@@ -177,7 +216,7 @@ setTasks(taskRes.data);
           </div>
           <div className="relative z-10">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold tracking-tight text-white">420</span>
+              <span className="text-3xl font-bold tracking-tight text-white">{totalPractice}</span>
               <span className="text-sm text-gray-400 font-medium">Qs</span>
             </div>
             <div className="flex items-center gap-1 mt-2 text-xs font-medium text-gray-400">
@@ -205,7 +244,7 @@ setTasks(taskRes.data);
             </div>
             <div className="p-6 h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={PERFORMANCE_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart data={performanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#111827" stopOpacity={0.1}/>
@@ -262,47 +301,73 @@ setTasks(taskRes.data);
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {RECENT_ACTIVITY.map((activity) => (
-                    <tr 
-                      key={activity.id} 
-                      onClick={() => router.push(activity.type === "Full Mock" ? "/mocks/1/result" : "/practice")}
-                      className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", activity.bg)}>
-                            <activity.icon className={cn("w-4 h-4", activity.iconColor)} />
-                          </div>
-                          <div>
-                            <div className="font-semibold text-gray-900">{activity.name}</div>
-                            <div className="text-xs text-gray-500">{activity.date}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 font-medium">
-                        {activity.type}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-1.5">
-                          {activity.status === "Completed" ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                          ) : (
-                            <Clock className="w-4 h-4 text-orange-500" />
-                          )}
-                          <span className={cn(
-                            "text-xs font-semibold",
-                            activity.status === "Completed" ? "text-emerald-700" : "text-orange-700"
-                          )}>
-                            {activity.status}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="font-semibold text-gray-900">{activity.score}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+
+  {recentActivity.length === 0 ? (
+    <tr>
+      <td
+        colSpan={4}
+        className="text-center py-8 text-gray-500"
+      >
+        No mock tests attempted yet.
+      </td>
+    </tr>
+  ) : (
+    recentActivity.map((activity) => (
+      <tr
+        key={activity.id}
+        onClick={() =>
+          router.push(
+            activity.type === "Full Mock"
+              ? "/mocks/1/result"
+              : "/practice"
+          )
+        }
+        className="hover:bg-gray-50/50 transition-colors group cursor-pointer"
+      >
+        <td className="px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50">
+              <Play className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <div className="font-semibold text-gray-900">
+                {activity.name}
+              </div>
+              <div className="text-xs text-gray-500">
+                {activity.date}
+              </div>
+            </div>
+          </div>
+        </td>
+
+        <td className="px-6 py-4 text-gray-600 font-medium">
+          {activity.type}
+        </td>
+
+        <td className="px-6 py-4">
+          <div className="flex items-center gap-1.5">
+            {activity.status === "Completed" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            ) : (
+              <Clock className="w-4 h-4 text-orange-500" />
+            )}
+
+            <span className="text-xs font-semibold text-emerald-700">
+              {activity.status}
+            </span>
+          </div>
+        </td>
+
+        <td className="px-6 py-4 text-right">
+          <span className="font-semibold text-gray-900">
+            {activity.score}
+          </span>
+        </td>
+      </tr>
+    ))
+  )}
+
+</tbody>
               </table>
             </div>
           </div>

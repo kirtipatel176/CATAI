@@ -12,6 +12,7 @@ import {
   ChevronLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { mockApi } from "@/lib/mock-api";
 
 const FULL_MOCKS = [
   { id: 1, name: "CAT Mock 01", questions: 66, duration: 120, difficulty: "Medium", attemptCount: 1, status: "Completed", score: "91.4" },
@@ -79,10 +80,44 @@ const HorizontalSection = ({ title, items, renderItem }: { title: string, items:
 
 export default function MocksLibraryPage() {
   const [mounted, setMounted] = useState(false);
+  const [fullMocks, setFullMocks] = useState(FULL_MOCKS);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+useEffect(() => {
+  setMounted(true);
+
+  const loadMocks = async () => {
+    try {
+      const history = await mockApi.history();
+
+      if (history.length > 0) {
+        const mapped = history.map((mock: any) => ({
+  id: mock.id,
+  name: mock.testName,
+  questions: 66,
+  duration: 120,
+  difficulty:
+    mock.overallPercentile >= 95
+      ? "Hard"
+      : mock.overallPercentile >= 80
+      ? "Medium"
+      : "Easy",
+  attemptCount: 1,
+  status:
+    mock.overallPercentile
+      ? "Completed"
+      : "Start",
+  score: mock.overallPercentile ?? "",
+}));
+
+        setFullMocks(mapped);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  loadMocks();
+}, []);
 
   if (!mounted) return null;
 
@@ -107,7 +142,7 @@ export default function MocksLibraryPage() {
       >
         <HorizontalSection
           title="Full CAT Mocks"
-          items={FULL_MOCKS}
+          items={fullMocks}
           renderItem={(mock) => (
             <Link href={`/mocks/${mock.id}${mock.status === "Completed" ? "/result" : "/exam"}`} className="block group">
               <div className="w-[320px] md:w-[400px] h-[260px] relative rounded-[28px] overflow-hidden bg-white/40 backdrop-blur-2xl border border-white/60 shadow-apple-soft transition-all duration-500 group-hover:scale-[1.03] group-hover:shadow-2xl">
